@@ -1,0 +1,29 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"type": "xrun",
+			"request": "launch",
+			"name": "Ask for file name",
+			"program": "${workspaceFolder}/${command:AskForProgramName}",
+			"stopOnEntry": true
+		},
+		{
+			"type": "xrun",
+			"request": "launch",
+			"name": "Run Simulation",
+			"program": "${workspaceFolder}/readme.md",
+			"stopOnEntry": true,
+			"trace": false,
+			"noDebug": true
+		},
+		{
+			"type": "xrun",
+			"request": "launch",
+			"name": "Run+Debug Simulation",
+			"program": "${workspaceFolder}/readme.md",
+			"stopOnEntry": true,
+			"trace": false
+		}
+	]
+}
