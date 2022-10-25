@@ -2,28 +2,6 @@
  * Copyright (C) Microsoft Corporation. All rights reserved.
  *--------------------------------------------------------*/
 
-const ls = require("child_process").spawn("/bin/sh", {
-	shell: false,
-});
-
-ls.stdout.on("data", (data: string) => {
-	process.stdout.cork();
-	process.stdout.write(data);
-	process.stdout.uncork();
-});
-
-ls.stderr.on("data", (data: string) => {
-	console.log(`stderr: ${data}`);
-});
-
-ls.on('error', (error: { message: any; }) => {
-	console.log(`error: ${error.message}`);
-});
-
-ls.on("close", (code: any) => {
-	console.log(`child process exited with code ${code}`);
-});
-
 import { EventEmitter } from 'events';
 
 export interface FileAccessor {
@@ -170,9 +148,54 @@ export class MockRuntime extends EventEmitter {
 	private namedException: string | undefined;
 	private otherExceptions = false;
 
+	ls = require("child_process").spawn("/bin/sh", {
+		shell: false,
+	});
+
+	readline = require("readline"); 
+	readline_interface = this.readline.createInterface({ input: this.ls.stdout });
 
 	constructor(private fileAccessor: FileAccessor) {
 		super();
+
+		this.ls.stdout.setEncoding('utf-8');
+
+		this.readline_interface.on('line', (line: string) => {
+			console.log(line);
+			this.onStdOut(line);
+		});
+		
+		this.ls.stderr.on("data", (data: string) => {
+			console.log(`stderr: ${data}`);
+		});
+		
+		this.ls.on('error', (error: { message: any; }) => {
+			console.log(`error: ${error.message}`);
+		});
+		
+		this.ls.on("close", (code: any) => {
+			console.log(`child process exited with code ${code}`);
+		});
+	}
+
+	public onStdOut(line: string): void{
+		/* Simulation has completed and initial command has been echoed back, terminate */
+		if(line.search('./run_sim.sh') !== -1){
+			console.log('[Xrun-debug Extension] Simulation ended, terminating shell process');
+			this.ls.kill();
+			this.sendEvent('end');
+		}
+
+		if(line.search('Created stop 1:') !== -1){
+			console.log("DETECTED INITIAL STOP");
+			this.sendSimulatorTerminalCommand("run");
+			this.sendEvent('stopOnBreakpoint');
+		}
+
+		/*if(line.search('(stop ') !== -1){
+			console.log("BREAKPOINT HIT");
+			this.sendEvent('stopOnBreakpoint');
+		}*/
 	}
 
 
@@ -180,49 +203,29 @@ export class MockRuntime extends EventEmitter {
 	 * Start executing the given program.
 	 */
 	public async start(program: string, args: string, stopOnEntry: boolean, debug: boolean): Promise<void> {
-	
 		let env = program.substring(0, program.lastIndexOf('/'));
 		let exe = program.substring(program.lastIndexOf('/') + 1);
-		ls.stdin.cork();
-		ls.stdin.write("cd " + env + "\n");
-		ls.stdin.uncork();
+		
+		this.sendSimulatorTerminalCommand("cd " + env);
 
-		ls.stdin.cork();
 		if(debug) 
-			ls.stdin.write("./" + exe + " " + args + " -i\n");
+			this.sendSimulatorTerminalCommand("./" + exe + " " + args + " -i");
 		else
-			ls.stdin.write("./" + exe + " " + args + "\n");
-		ls.stdin.uncork();
+			this.sendSimulatorTerminalCommand("./" + exe + " " + args);
 
-		//await this.loadSource(this.normalizePathAndCasing(program));
-
-		if (debug) {
-			await this.verifyBreakpoints(this._sourceFile);
-
-			if (stopOnEntry) {
-				this.findNextStatement(false, 'stopOnEntry');
-			} else {
-				// we just start to run until we hit a breakpoint, an exception, or the end of the program
-				this.continue(false);
-			}
+		/*if (debug) {
+			this.continue();
 		} else {
-			this.continue(false);
-		}
+			this.continue();
+		}*/
 	}
 
 	/**
 	 * Continue execution to the end/beginning.
 	 */
-	public continue(reverse: boolean) {
-
-		while (!this.executeLine(this.currentLine, reverse)) {
-			if (this.updateCurrentLine(reverse)) {
-				break;
-			}
-			if (this.findNextStatement(reverse)) {
-				break;
-			}
-		}
+	public continue() {
+		console.log("RUNTIME.CONTINUE");
+		this.sendSimulatorTerminalCommand("run");
 	}
 
 	/**
@@ -370,11 +373,13 @@ export class MockRuntime extends EventEmitter {
 	/*
 	 * Set breakpoint in file with given line.
 	 */
-	public async setBreakPoint(path: string, line: number): Promise<IRuntimeBreakpoint> {
-		path = this.normalizePathAndCasing(path);
-
+	public async setBreakPoint(path: string, line: number): Promise<IRuntimeBreakpoint> {		
 		const bp: IRuntimeBreakpoint = { verified: false, line, id: this.breakpointId++ };
 		let bps = this.breakPoints.get(path);
+
+		// xrun format
+		// stop -create -file <filepath> -line <line# (not zero aligned)>
+		this.sendSimulatorTerminalCommand("stop -create -file " + path + " -line " + line + " -all");
 		if (!bps) {
 			bps = new Array<IRuntimeBreakpoint>();
 			this.breakPoints.set(path, bps);
@@ -716,5 +721,12 @@ export class MockRuntime extends EventEmitter {
 		} else {
 			return path.replace(/\\/g, '/');
 		}
+	}
+
+	private sendSimulatorTerminalCommand(str: string){
+		this.ls.stdin.cork();
+		this.ls.stdin.write(str + '\n');
+		this.ls.stdin.uncork();
+		console.log("Terminal command sent: " + str);
 	}
 }

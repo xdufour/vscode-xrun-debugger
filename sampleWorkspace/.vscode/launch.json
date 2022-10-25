@@ -12,19 +12,11 @@
 		{
 			"type": "xrun",
 			"request": "launch",
-			"name": "Run Simulation",
-			"program": "${workspaceFolder}/readme.md",
-			"stopOnEntry": true,
-			"trace": false,
+			"name": "BT005 Peripherals",
+			"program": "/home/cad/Design/Projects/bt005/bt005f/digital/Core_HDL_xdufour/ver/run_sim.sh",
+            "args": "-t peripherals",
+			"stopOnEntry": false,
 			"noDebug": true
-		},
-		{
-			"type": "xrun",
-			"request": "launch",
-			"name": "Run+Debug Simulation",
-			"program": "${workspaceFolder}/readme.md",
-			"stopOnEntry": true,
-			"trace": false
 		}
 	]
 }

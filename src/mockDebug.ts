@@ -285,7 +285,7 @@ export class MockDebugSession extends LoggingDebugSession {
 
 		// set and verify breakpoint locations
 		const actualBreakpoints0 = clientLines.map(async l => {
-			const { verified, line, id } = await this._runtime.setBreakPoint(path, this.convertClientLineToDebugger(l));
+			const { verified, line, id } = await this._runtime.setBreakPoint(path, l);
 			const bp = new Breakpoint(verified, this.convertDebuggerLineToClient(line)) as DebugProtocol.Breakpoint;
 			bp.id = id;
 			return bp;
@@ -500,14 +500,9 @@ export class MockDebugSession extends LoggingDebugSession {
 	}
 
 	protected continueRequest(response: DebugProtocol.ContinueResponse, args: DebugProtocol.ContinueArguments): void {
-		this._runtime.continue(false);
+		this._runtime.continue();
 		this.sendResponse(response);
 	}
-
-	protected reverseContinueRequest(response: DebugProtocol.ReverseContinueResponse, args: DebugProtocol.ReverseContinueArguments): void {
-		this._runtime.continue(true);
-		this.sendResponse(response);
- 	}
 
 	protected nextRequest(response: DebugProtocol.NextResponse, args: DebugProtocol.NextArguments): void {
 		this._runtime.step(args.granularity === 'instruction', false);

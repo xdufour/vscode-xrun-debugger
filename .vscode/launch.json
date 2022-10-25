@@ -7,7 +7,7 @@
 			"request": "launch",
 			"args": [
 				"--extensionDevelopmentPath=${workspaceFolder}",
-				"${workspaceFolder}/sampleWorkspace"
+				"/home/cad/Design/Projects/bt005/bt005f/digital/Core_HDL_xdufour"
 			],
 			"outFiles": [
 				"${workspaceFolder}/dist/**/*.js"

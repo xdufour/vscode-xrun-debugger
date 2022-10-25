@@ -80,29 +80,29 @@
       "editor/title/run": [
         {
           "command": "extension.xrun-debug.runEditorContents",
-          "when": "resourceLangId == markdown",
+          "when": "resourceLangId == systemverilog",
           "group": "navigation@1"
         },
         {
           "command": "extension.xrun-debug.debugEditorContents",
-          "when": "resourceLangId == markdown",
+          "when": "resourceLangId == systemverilog",
           "group": "navigation@2"
         }
       ],
       "commandPalette": [
         {
           "command": "extension.xrun-debug.debugEditorContents",
-          "when": "resourceLangId == markdown"
+          "when": "resourceLangId == systemverilog"
         },
         {
           "command": "extension.xrun-debug.runEditorContents",
-          "when": "resourceLangId == markdown"
+          "when": "resourceLangId == systemverilog"
         }
       ],
       "debug/variables/context": [
         {
           "command": "extension.xrun-debug.toggleFormatting",
-          "when": "debugType == 'mock' && debugProtocolVariableMenuContext == 'simple'"
+          "when": "debugType == 'xrun' && debugProtocolVariableMenuContext == 'simple'"
         }
       ]
     },
@@ -128,14 +128,15 @@
     ],
     "breakpoints": [
       {
-        "language": "markdown"
+        "language": "systemverilog"
       }
     ],
     "debuggers": [
       {
         "type": "xrun",
         "languages": [
-          "markdown"
+          "systemverilog",
+          "verilog"
         ],
         "label": "Xrun Debug",
         "program": "./out/debugAdapter.js",
@@ -148,8 +149,13 @@
             "properties": {
               "program": {
                 "type": "string",
-                "description": "Absolute path to a text file.",
-                "default": "${workspaceFolder}/${command:AskForArguments}"
+                "description": "Absolute path to xrun pre-launch config script",
+                "default": ""
+              },
+              "args": {
+                "type": "string",
+                "description": "Command line arguments for xrun",
+                "default": ""
               },
               "stopOnEntry": {
                 "type": "boolean",
@@ -176,42 +182,6 @@
                 ]
               }
             }
-          },
-          "attach": {
-            "required": [
-              "program"
-            ],
-            "properties": {
-              "program": {
-                "type": "string",
-                "description": "Absolute path to a text file.",
-                "default": "${workspaceFolder}/${command:AskForArguments}"
-              },
-              "stopOnEntry": {
-                "type": "boolean",
-                "description": "Automatically stop after attach.",
-                "default": true
-              },
-              "trace": {
-                "type": "boolean",
-                "description": "Enable logging of the Debug Adapter Protocol.",
-                "default": true
-              },
-              "compileError": {
-                "type": "string",
-                "description": "Simulates a compile error in 'attach' request.",
-                "enum": [
-                  "default",
-                  "show",
-                  "hide"
-                ],
-                "enumDescriptions": [
-                  "default: show fake compile error to user",
-                  "show fake compile error to user",
-                  "do not show fake compile error to user"
-                ]
-              }
-            }
           }
         },
         "initialConfigurations": [
@@ -220,7 +190,7 @@
             "request": "launch",
             "name": "Manual",
             "program": "/home/cad/Design/Projects/bt005/bt005f/digital/Core_HDL_xdufour/ver/run_sim.sh",
-            "args": "${workspaceFolder}/${command:AskForArguments}",
+            "args": "${command:AskForArguments}",
             "stopOnEntry": true
           }
         ],
@@ -233,7 +203,7 @@
               "request": "launch",
               "name": "Manual",
               "program": "/home/cad/Design/Projects/bt005/bt005f/digital/Core_HDL_xdufour/ver/run_sim.sh",
-              "args": "^\"\\${workspaceFolder}/\\${command:AskForArguments}\"",
+              "args": "^\"\\${command:AskForArguments}\"",
               "stopOnEntry": true
             }
           }
