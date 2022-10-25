@@ -68,7 +68,7 @@
   "activationEvents": [
     "onDebugResolve:xrun",
     "onDebugDynamicConfigurations:xrun",
-    "onCommand:extension.xrun-debug.getProgramName",
+    "onCommand:extension.xrun-debug.getRunSimArgs",
     "onCommand:extension.xrun-debug.runEditorContents",
     "onCommand:extension.xrun-debug.debugEditorContents"
   ],
@@ -149,7 +149,7 @@
               "program": {
                 "type": "string",
                 "description": "Absolute path to a text file.",
-                "default": "${workspaceFolder}/${command:AskForProgramName}"
+                "default": "${workspaceFolder}/${command:AskForArguments}"
               },
               "stopOnEntry": {
                 "type": "boolean",
@@ -185,7 +185,7 @@
               "program": {
                 "type": "string",
                 "description": "Absolute path to a text file.",
-                "default": "${workspaceFolder}/${command:AskForProgramName}"
+                "default": "${workspaceFolder}/${command:AskForArguments}"
               },
               "stopOnEntry": {
                 "type": "boolean",
@@ -218,8 +218,9 @@
           {
             "type": "xrun",
             "request": "launch",
-            "name": "Ask for file name",
-            "program": "${workspaceFolder}/${command:AskForProgramName}",
+            "name": "Manual",
+            "program": "/home/cad/Design/Projects/bt005/bt005f/digital/Core_HDL_xdufour/ver/run_sim.sh",
+            "args": "${workspaceFolder}/${command:AskForArguments}",
             "stopOnEntry": true
           }
         ],
@@ -230,14 +231,15 @@
             "body": {
               "type": "xrun",
               "request": "launch",
-              "name": "Ask for file name",
-              "program": "^\"\\${workspaceFolder}/\\${command:AskForProgramName}\"",
+              "name": "Manual",
+              "program": "/home/cad/Design/Projects/bt005/bt005f/digital/Core_HDL_xdufour/ver/run_sim.sh",
+              "args": "^\"\\${workspaceFolder}/\\${command:AskForArguments}\"",
               "stopOnEntry": true
             }
           }
         ],
         "variables": {
-          "AskForProgramName": "extension.xrun-debug.getProgramName"
+          "AskForArguments": "extension.xrun-debug.getRunSimArgs"
         }
       }
     ]

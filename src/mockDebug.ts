@@ -32,6 +32,8 @@ import * as base64 from 'base64-js';
 interface ILaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
 	/** An absolute path to the "program" to debug. */
 	program: string;
+	/** Arguments to pass to the xrun script */
+	args: string;
 	/** Automatically stop target after launch. If not specified, target does not stop. */
 	stopOnEntry?: boolean;
 	/** enable logging the Debug Adapter Protocol */
@@ -176,7 +178,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		response.body.supportsStepInTargetsRequest = true;
 
 		// the adapter defines two exceptions filters, one with support for conditions.
-		response.body.supportsExceptionFilterOptions = true;
+		response.body.supportsExceptionFilterOptions = false;
 		response.body.exceptionBreakpointFilters = [
 			{
 				filter: 'namedException',
@@ -253,7 +255,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		await this._configurationDone.wait(1000);
 
 		// start the program in the runtime
-		await this._runtime.start(args.program, !!args.stopOnEntry, !args.noDebug);
+		await this._runtime.start(args.program, args.args, !!args.stopOnEntry, !args.noDebug);
 
 		if (args.compileError) {
 			// simulate a compile/build error in "launch" request:

@@ -54,10 +54,10 @@ export function activateMockDebug(context: vscode.ExtensionContext, factory?: vs
 		})
 	);
 
-	context.subscriptions.push(vscode.commands.registerCommand('extension.xrun-debug.getProgramName', config => {
+	context.subscriptions.push(vscode.commands.registerCommand('extension.xrun-debug.getRunSimArgs', config => {
 		return vscode.window.showInputBox({
-			placeHolder: "Please enter the name of a markdown file in the workspace folder",
-			value: "readme.md"
+			placeHolder: "Please enter all config options for run_sim.sh",
+			value: "-t wfg1"
 		});
 	}));
 

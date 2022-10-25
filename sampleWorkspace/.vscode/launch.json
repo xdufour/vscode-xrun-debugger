@@ -4,8 +4,9 @@
 		{
 			"type": "xrun",
 			"request": "launch",
-			"name": "Ask for file name",
-			"program": "${workspaceFolder}/${command:AskForProgramName}",
+			"name": "BT005 Manual",
+			"program": "/home/cad/Design/Projects/bt005/bt005f/digital/Core_HDL_xdufour/ver/run_sim.sh",
+            "args": "${command:AskForArguments}",
 			"stopOnEntry": true
 		},
 		{

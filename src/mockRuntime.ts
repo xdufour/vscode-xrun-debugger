@@ -2,6 +2,28 @@
  * Copyright (C) Microsoft Corporation. All rights reserved.
  *--------------------------------------------------------*/
 
+const ls = require("child_process").spawn("/bin/sh", {
+	shell: false,
+});
+
+ls.stdout.on("data", (data: string) => {
+	process.stdout.cork();
+	process.stdout.write(data);
+	process.stdout.uncork();
+});
+
+ls.stderr.on("data", (data: string) => {
+	console.log(`stderr: ${data}`);
+});
+
+ls.on('error', (error: { message: any; }) => {
+	console.log(`error: ${error.message}`);
+});
+
+ls.on("close", (code: any) => {
+	console.log(`child process exited with code ${code}`);
+});
+
 import { EventEmitter } from 'events';
 
 export interface FileAccessor {
@@ -153,12 +175,26 @@ export class MockRuntime extends EventEmitter {
 		super();
 	}
 
+
 	/**
 	 * Start executing the given program.
 	 */
-	public async start(program: string, stopOnEntry: boolean, debug: boolean): Promise<void> {
+	public async start(program: string, args: string, stopOnEntry: boolean, debug: boolean): Promise<void> {
+	
+		let env = program.substring(0, program.lastIndexOf('/'));
+		let exe = program.substring(program.lastIndexOf('/') + 1);
+		ls.stdin.cork();
+		ls.stdin.write("cd " + env + "\n");
+		ls.stdin.uncork();
 
-		await this.loadSource(this.normalizePathAndCasing(program));
+		ls.stdin.cork();
+		if(debug) 
+			ls.stdin.write("./" + exe + " " + args + " -i\n");
+		else
+			ls.stdin.write("./" + exe + " " + args + "\n");
+		ls.stdin.uncork();
+
+		//await this.loadSource(this.normalizePathAndCasing(program));
 
 		if (debug) {
 			await this.verifyBreakpoints(this._sourceFile);
