@@ -88,6 +88,22 @@ export function timeout(ms: number) {
 	return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+class EventEmitterQueue extends EventEmitter{
+	private q: any;
+	constructor() { 
+		super();
+		this.q = []; 
+	}
+
+	push(item){ 
+		this.q.push(item); 
+		this.emit("data");
+	}
+	pop(){ 
+		return this.q.shift(); 
+	}
+}
+
 /**
  * A Mock runtime with minimal debugger functionality.
  * MockRuntime is a hypothetical (aka "Mock") "execution engine with debugging support":
@@ -148,6 +164,8 @@ export class MockRuntime extends EventEmitter {
 	private namedException: string | undefined;
 	private otherExceptions = false;
 
+	private queue = new EventEmitterQueue();
+
 	ls = require("child_process").spawn("/bin/sh", {
 		shell: false,
 	});
@@ -162,7 +180,7 @@ export class MockRuntime extends EventEmitter {
 
 		this.readline_interface.on('line', (line: string) => {
 			console.log(line);
-			this.onStdOut(line);
+			this.queue.push(line);
 		});
 		
 		this.ls.stderr.on("data", (data: string) => {
@@ -176,26 +194,32 @@ export class MockRuntime extends EventEmitter {
 		this.ls.on("close", (code: any) => {
 			console.log(`child process exited with code ${code}`);
 		});
+
+		this.queue.on("data", (data: string) => {
+			this.onStdOut(this.queue.pop());
+		});
 	}
 
 	public onStdOut(line: string): void{
 		/* Simulation has completed and initial command has been echoed back, terminate */
-		if(line.search('./run_sim.sh') !== -1){
+		if(line.search(/\$finish;/) !== -1){
+			this.sendSimulatorTerminalCommand("exit");
+		}
+		else if(line.search('./run_sim.sh') !== -1){
 			console.log('[Xrun-debug Extension] Simulation ended, terminating shell process');
 			this.ls.kill();
 			this.sendEvent('end');
 		}
-
-		if(line.search('Created stop 1:') !== -1){
+		else if(line.search('Created stop 1:') !== -1){
 			console.log("DETECTED INITIAL STOP");
 			this.sendSimulatorTerminalCommand("run");
 			this.sendEvent('stopOnBreakpoint');
 		}
 
-		/*if(line.search('(stop ') !== -1){
+		if(line.search(/\(stop\s\d+:/) !== -1){
 			console.log("BREAKPOINT HIT");
 			this.sendEvent('stopOnBreakpoint');
-		}*/
+		}
 	}
 
 
@@ -367,7 +391,8 @@ export class MockRuntime extends EventEmitter {
 	 * Here we return the start location of words with more than 8 characters.
 	 */
 	public getBreakpoints(path: string, line: number): number[] {
-		return this.getWords(line, this.getLine(line)).filter(w => w.name.length > 8).map(w => w.index);
+		//return this.getWords(line, this.getLine(line)).filter(w => w.name.length > 8).map(w => w.index);
+		return [0];
 	}
 
 	/*
