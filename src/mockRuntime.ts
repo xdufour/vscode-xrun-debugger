@@ -219,9 +219,17 @@ export class MockRuntime extends EventEmitter {
 		}
 
 		if(line.search(/\(stop\s\d+:/) !== -1){
+			let bp_line_idx: number = line.search(/:\d+\)/);
+			let bp_line_str: string = line.substring(bp_line_idx + 1, line.length - 1);
+			let bp_file_str: string = line.substring(line.search(/\(stop\s\d+:/) + 11, bp_line_idx);
 			console.log("BREAKPOINT HIT");
-			console.log("line: " + line.substring(line.search(/:\d+\)/) + 1, line.length - 1));
-			this.currentLine = parseInt(line.substring(line.search(/:\d+\)/) + 1, line.length - 1)) - 1;
+			console.log("line: " + bp_line_str);
+			for (const path of this.breakPoints.keys()){
+				if(path.search(bp_file_str) !== -1){
+					this._sourceFile = path;
+				}
+			}
+			this.currentLine = parseInt(bp_line_str) - 1;
 			this.sendEvent('stopOnBreakpoint');
 		}
 	}
@@ -507,6 +515,8 @@ export class MockRuntime extends EventEmitter {
 				this.variables.set(strs[0], new RuntimeVariable(strs[0], strs[1].substring(strs[1].search(/'h/) + 2)));
 			});
 		});
+
+		this.variables.clear();
 		this.sendSimulatorTerminalCommand("value -verbose *");
 		await once(rl, 'line');
 		rl.removeAllListeners();
