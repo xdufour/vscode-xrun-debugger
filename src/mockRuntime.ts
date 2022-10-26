@@ -104,6 +104,8 @@ class EventEmitterQueue extends EventEmitter{
 	}
 }
 
+import { once } from 'node:events';
+
 /**
  * A Mock runtime with minimal debugger functionality.
  * MockRuntime is a hypothetical (aka "Mock") "execution engine with debugging support":
@@ -218,6 +220,8 @@ export class MockRuntime extends EventEmitter {
 
 		if(line.search(/\(stop\s\d+:/) !== -1){
 			console.log("BREAKPOINT HIT");
+			console.log("line: " + line.substring(line.search(/:\d+\)/) + 1, line.length - 1));
+			this.currentLine = parseInt(line.substring(line.search(/:\d+\)/) + 1, line.length - 1)) - 1;
 			this.sendEvent('stopOnBreakpoint');
 		}
 	}
@@ -404,7 +408,7 @@ export class MockRuntime extends EventEmitter {
 
 		// xrun format
 		// stop -create -file <filepath> -line <line# (not zero aligned)>
-		this.sendSimulatorTerminalCommand("stop -create -file " + path + " -line " + line + " -all");
+		this.sendSimulatorTerminalCommand("stop -create -file " + path + " -line " + line + " -all -name " + bp.id);
 		if (!bps) {
 			bps = new Array<IRuntimeBreakpoint>();
 			this.breakPoints.set(path, bps);
@@ -418,9 +422,10 @@ export class MockRuntime extends EventEmitter {
 
 	/*
 	 * Clear breakpoint in file with given line.
+	 * FIXME: For some reason, this function is never called, probably redundant / not useful
 	 */
 	public clearBreakPoint(path: string, line: number): IRuntimeBreakpoint | undefined {
-		const bps = this.breakPoints.get(this.normalizePathAndCasing(path));
+		const bps = this.breakPoints.get(path);
 		if (bps) {
 			const index = bps.findIndex(bp => bp.line === line);
 			if (index >= 0) {
@@ -433,7 +438,13 @@ export class MockRuntime extends EventEmitter {
 	}
 
 	public clearBreakpoints(path: string): void {
-		this.breakPoints.delete(this.normalizePathAndCasing(path));
+		const bps = this.breakPoints.get(path);
+		if(bps){
+			bps.forEach(bp => {
+				this.sendSimulatorTerminalCommand("stop -delete " + bp.id);
+			});
+		}
+		this.breakPoints.delete(path);
 	}
 
 	public setDataBreakpoint(address: string, accessType: 'read' | 'write' | 'readWrite'): boolean {
@@ -484,7 +495,22 @@ export class MockRuntime extends EventEmitter {
 		return a;
 	}
 
-	public getLocalVariables(): RuntimeVariable[] {
+	public async getLocalVariables(): Promise<RuntimeVariable[]> {
+		let assignments: string[] = [];
+		let strs: string[] = [];
+		const rl = this.readline.createInterface({ input: this.ls.stdout});
+	
+		rl.on('line', (line: string) => {
+			assignments = line.split(' ');
+			assignments.forEach(it => {
+				strs = it.split('=');
+				this.variables.set(strs[0], new RuntimeVariable(strs[0], strs[1].substring(strs[1].search(/'h/) + 2)));
+			});
+		});
+		this.sendSimulatorTerminalCommand("value -verbose *");
+		await once(rl, 'line');
+		rl.removeAllListeners();
+
 		return Array.from(this.variables, ([name, value]) => value);
 	}
 

@@ -460,7 +460,7 @@ export class MockDebugSession extends LoggingDebugSession {
 
 		const v = this._variableHandles.get(args.variablesReference);
 		if (v === 'locals') {
-			vs = this._runtime.getLocalVariables();
+			vs = await this._runtime.getLocalVariables();
 		} else if (v === 'globals') {
 			if (request) {
 				this._cancellationTokens.set(request.seq, false);

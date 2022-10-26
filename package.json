@@ -87,6 +87,16 @@
           "command": "extension.xrun-debug.debugEditorContents",
           "when": "resourceLangId == systemverilog",
           "group": "navigation@2"
+        },
+        {
+          "command": "extension.xrun-debug.runEditorContents",
+          "when": "resourceLangId == verilog",
+          "group": "navigation@1"
+        },
+        {
+          "command": "extension.xrun-debug.debugEditorContents",
+          "when": "resourceLangId == verilog",
+          "group": "navigation@2"
         }
       ],
       "commandPalette": [
@@ -97,6 +107,14 @@
         {
           "command": "extension.xrun-debug.runEditorContents",
           "when": "resourceLangId == systemverilog"
+        },
+        {
+          "command": "extension.xrun-debug.debugEditorContents",
+          "when": "resourceLangId == verilog"
+        },
+        {
+          "command": "extension.xrun-debug.runEditorContents",
+          "when": "resourceLangId == verilog"
         }
       ],
       "debug/variables/context": [
@@ -129,6 +147,9 @@
     "breakpoints": [
       {
         "language": "systemverilog"
+      },
+      {
+        "language": "verilog"
       }
     ],
     "debuggers": [
