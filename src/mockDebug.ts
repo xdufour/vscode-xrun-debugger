@@ -20,7 +20,6 @@ import {
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { basename } from 'path-browserify';
 import { MockRuntime, IRuntimeBreakpoint, FileAccessor, RuntimeVariable, timeout, IRuntimeVariableType } from './mockRuntime';
-import { Subject } from 'await-notify';
 import * as base64 from 'base64-js';
 
 /**
@@ -57,8 +56,6 @@ export class MockDebugSession extends LoggingDebugSession {
 
 	private _variableHandles = new Handles<'locals' | 'globals' | RuntimeVariable>();
 
-	private _configurationDone = new Subject();
-
 	private _cancellationTokens = new Map<number, boolean>();
 
 	private _reportProgress = false;
@@ -66,7 +63,7 @@ export class MockDebugSession extends LoggingDebugSession {
 	private _cancelledProgressId: string | undefined = undefined;
 	private _isProgressCancellable = true;
 
-	private _valuesInHex = false;
+	private _valuesInHex = true;
 	private _useInvalidatedEvent = false;
 
 	private _addressesInHex = true;
@@ -239,6 +236,10 @@ export class MockDebugSession extends LoggingDebugSession {
 	}
 
 	protected disconnectRequest(response: DebugProtocol.DisconnectResponse, args: DebugProtocol.DisconnectArguments, request?: DebugProtocol.Request): void {
+		if(args.terminateDebuggee) {
+			this._runtime.terminate();
+		}
+		
 		console.log(`disconnectRequest suspend: ${args.suspendDebuggee}, terminate: ${args.terminateDebuggee}`);
 	}
 
@@ -251,11 +252,11 @@ export class MockDebugSession extends LoggingDebugSession {
 		// make sure to 'Stop' the buffered logging if 'trace' is not set
 		logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
 
-		// wait 1 second until configuration has finished (and configurationDoneRequest has been called)
-		await this._configurationDone.wait(1000);
-
 		// start the program in the runtime
 		await this._runtime.start(args.program, args.args, !!args.stopOnEntry, !args.noDebug);
+
+		// wait 1 second until configuration has finished (and configurationDoneRequest has been called)
+		await this._configurationDone.wait(1000);
 
 		if (args.compileError) {
 			// simulate a compile/build error in "launch" request:
@@ -842,48 +843,41 @@ export class MockDebugSession extends LoggingDebugSession {
 			value: '???',
 			type: typeof v.value,
 			variablesReference: 0,
-			evaluateName: '$' + v.name
+			evaluateName: v.name
 		};
 
-		if (v.name.indexOf('lazy') >= 0) {
-			// a "lazy" variable needs an additional click to retrieve its value
-
-			dapVariable.value = 'lazy var';		// placeholder value
-			v.reference ??= this._variableHandles.create(new RuntimeVariable('', [ new RuntimeVariable('', v.value) ]));
+		if (Array.isArray(v.value)) {
+			dapVariable.value = 'Object';
+			v.reference ??= this._variableHandles.create(v);
 			dapVariable.variablesReference = v.reference;
-			dapVariable.presentationHint = { lazy: true };
 		} else {
 
-			if (Array.isArray(v.value)) {
-				dapVariable.value = 'Object';
-				v.reference ??= this._variableHandles.create(v);
-				dapVariable.variablesReference = v.reference;
-			} else {
-
-				switch (typeof v.value) {
-					case 'number':
-						if (Math.round(v.value) === v.value) {
-							dapVariable.value = this.formatNumber(v.value);
-							(<any>dapVariable).__vscodeVariableMenuContext = 'simple';	// enable context menu contribution
-							dapVariable.type = 'integer';
-						} else {
-							dapVariable.value = v.value.toString();
-							dapVariable.type = 'float';
-						}
-						break;
-					case 'string':
-						dapVariable.value = `"${v.value}"`;
-						break;
-					case 'boolean':
-						dapVariable.value = v.value ? 'true' : 'false';
-						break;
-					default:
-						dapVariable.value = typeof v.value;
-						break;
-				}
+			switch (typeof v.value) {
+				case 'number':
+					if (Math.round(v.value) === v.value) {
+						dapVariable.value = this.formatNumber(v.value);
+						(<any>dapVariable).__vscodeVariableMenuContext = 'simple';	// enable context menu contribution
+						dapVariable.type = 'integer';
+					} else {
+						dapVariable.value = v.value.toString();
+						dapVariable.type = 'float';
+					}
+					break;
+				case 'string':
+					if(v.value.search(/'h/) !== -1){
+						dapVariable.type = 'integer';
+					}
+					dapVariable.value = v.value;
+					break;
+				case 'boolean':
+					dapVariable.value = v.value ? 'true' : 'false';
+					break;
+				default:
+					dapVariable.value = typeof v.value;
+					break;
 			}
 		}
-
+		
 		if (v.memory) {
 			v.reference ??= this._variableHandles.create(v);
 			dapVariable.memoryReference = String(v.reference);

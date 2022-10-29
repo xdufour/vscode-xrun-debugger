@@ -3,6 +3,7 @@
  *--------------------------------------------------------*/
 
 import { EventEmitter } from 'events';
+import { Subject } from 'await-notify';
 
 export interface FileAccessor {
 	isWindows: boolean;
@@ -133,6 +134,8 @@ export class MockRuntime extends EventEmitter {
 
 	private env: string = '';
 
+	private _configurationDone = new Subject();
+
 	// the contents (= lines) of the one and only file
 	private sourceLines: string[] = [];
 	private instructions: Word[] = [];
@@ -258,6 +261,10 @@ export class MockRuntime extends EventEmitter {
 		}*/
 	}
 
+	public terminate(){
+		this.sendSimulatorTerminalCommand("exit");
+	}
+
 	/**
 	 * Continue execution to the end/beginning.
 	 */
@@ -375,18 +382,20 @@ export class MockRuntime extends EventEmitter {
 		const rl = this.readline.createInterface({ input: this.ls.stdout});
 	
 		rl.on('line', (line: string) => {
-			let name: string = line.substring(0, line.search(/\sat\s/));
-			let line_idx: number = line.search(/:\d+$/);
-			let line_str: string = line.substring(line_idx + 1);
-			let file_str: string = line.substring(line.search(/\sat\s/) + 4, line_idx);
-			names.push(name);
-			if(file_str.substring(0, 3) == "../") {
-				files.push(this.env.substring(0, this.env.lastIndexOf('/')) + file_str.substring(2));
+			if(line.search(/\d.*\sat\s/) !== -1){
+				let name: string = line.substring(0, line.search(/\sat\s/));
+				let line_idx: number = line.search(/:\d+$/);
+				let line_str: string = line.substring(line_idx + 1);
+				let file_str: string = line.substring(line.search(/\sat\s/) + 4, line_idx);
+				names.push(name);
+				if(file_str.substring(0, 3) == "../") {
+					files.push(this.env.substring(0, this.env.lastIndexOf('/')) + file_str.substring(2));
+				}
+				else {
+					files.push(file_str);
+				}
+				lines.push(Number(line_str));
 			}
-			else {
-				files.push(file_str);
-			}
-			lines.push(Number(line_str));
 		});
 
 		this.sendSimulatorTerminalCommand("stack");
@@ -529,7 +538,7 @@ export class MockRuntime extends EventEmitter {
 			assignments = line.split(' ');
 			assignments.forEach(it => {
 				strs = it.split('=');
-				this.variables.set(strs[0], new RuntimeVariable(strs[0], strs[1].substring(strs[1].search(/'h/) + 2)));
+				this.variables.set(strs[0], new RuntimeVariable(strs[0], strs[1]));
 			});
 		});
 
