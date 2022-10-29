@@ -131,6 +131,8 @@ export class MockRuntime extends EventEmitter {
 
 	private variables = new Map<string, RuntimeVariable>();
 
+	private env: string = '';
+
 	// the contents (= lines) of the one and only file
 	private sourceLines: string[] = [];
 	private instructions: Word[] = [];
@@ -239,10 +241,10 @@ export class MockRuntime extends EventEmitter {
 	 * Start executing the given program.
 	 */
 	public async start(program: string, args: string, stopOnEntry: boolean, debug: boolean): Promise<void> {
-		let env = program.substring(0, program.lastIndexOf('/'));
+		this.env = program.substring(0, program.lastIndexOf('/'));
 		let exe = program.substring(program.lastIndexOf('/') + 1);
 		
-		this.sendSimulatorTerminalCommand("cd " + env);
+		this.sendSimulatorTerminalCommand("cd " + this.env);
 
 		if(debug) 
 			this.sendSimulatorTerminalCommand("./" + exe + " " + args + " -i");
@@ -365,28 +367,43 @@ export class MockRuntime extends EventEmitter {
 	/**
 	 * Returns a fake 'stacktrace' where every 'stackframe' is a word from the current line.
 	 */
-	public stack(startFrame: number, endFrame: number): IRuntimeStack {
+	public async stack(startFrame: number, endFrame: number): Promise<IRuntimeStack> {
 
-		const line = this.getLine();
-		const words = this.getWords(this.currentLine, line);
-		words.push({ name: 'BOTTOM', line: -1, index: -1 });	// add a sentinel so that the stack is never empty...
+		let names: string[] = [];
+		let files: string[] = [];
+		let lines: number[] = [];
+		const rl = this.readline.createInterface({ input: this.ls.stdout});
+	
+		rl.on('line', (line: string) => {
+			let name: string = line.substring(0, line.search(/\sat\s/));
+			let line_idx: number = line.search(/:\d+$/);
+			let line_str: string = line.substring(line_idx + 1);
+			let file_str: string = line.substring(line.search(/\sat\s/) + 4, line_idx);
+			names.push(name);
+			if(file_str.substring(0, 3) == "../") {
+				files.push(this.env.substring(0, this.env.lastIndexOf('/')) + file_str.substring(2));
+			}
+			else {
+				files.push(file_str);
+			}
+			lines.push(Number(line_str));
+		});
 
-		// if the line contains the word 'disassembly' we support to "disassemble" the line by adding an 'instruction' property to the stackframe
-		const instruction = line.indexOf('disassembly') >= 0 ? this.instruction : undefined;
-
-		const column = typeof this.currentColumn === 'number' ? this.currentColumn : undefined;
+		this.sendSimulatorTerminalCommand("stack");
+		await once(rl, 'line');
+		rl.removeAllListeners();
 
 		const frames: IRuntimeStackFrame[] = [];
 		// every word of the current line becomes a stack frame.
-		for (let i = startFrame; i < Math.min(endFrame, words.length); i++) {
+		for (let i = startFrame; i < Math.min(endFrame, names.length); i++) {
 
 			const stackFrame: IRuntimeStackFrame = {
 				index: i,
-				name: `${words[i].name}(${i})`,	// use a word of the line as the stackframe name
-				file: this._sourceFile,
-				line: this.currentLine,
-				column: column, // words[i].index
-				instruction: instruction
+				name: names[i],	
+				file: files[i],
+				line: lines[i] - 1,
+				column: 0, 
+				instruction: undefined
 			};
 
 			frames.push(stackFrame);
@@ -394,7 +411,7 @@ export class MockRuntime extends EventEmitter {
 
 		return {
 			frames: frames,
-			count: words.length
+			count: names.length
 		};
 	}
 

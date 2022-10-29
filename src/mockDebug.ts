@@ -374,13 +374,13 @@ export class MockDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
-	protected stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): void {
+	protected async stackTraceRequest(response: DebugProtocol.StackTraceResponse, args: DebugProtocol.StackTraceArguments): Promise<void> {
 
 		const startFrame = typeof args.startFrame === 'number' ? args.startFrame : 0;
 		const maxLevels = typeof args.levels === 'number' ? args.levels : 1000;
 		const endFrame = startFrame + maxLevels;
 
-		const stk = this._runtime.stack(startFrame, endFrame);
+		const stk = await this._runtime.stack(startFrame, endFrame);
 
 		response.body = {
 			stackFrames: stk.frames.map((f, ix) => {
