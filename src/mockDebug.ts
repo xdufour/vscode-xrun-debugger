@@ -20,6 +20,7 @@ import {
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { basename } from 'path-browserify';
 import { MockRuntime, IRuntimeBreakpoint, FileAccessor, RuntimeVariable, timeout, IRuntimeVariableType } from './mockRuntime';
+import { Subject } from 'await-notify';
 import * as base64 from 'base64-js';
 
 /**
@@ -55,6 +56,8 @@ export class MockDebugSession extends LoggingDebugSession {
 	private _runtime: MockRuntime;
 
 	private _variableHandles = new Handles<'locals' | 'globals' | RuntimeVariable>();
+
+	private _configurationDone = new Subject();
 
 	private _cancellationTokens = new Map<number, boolean>();
 
@@ -576,11 +579,10 @@ export class MockDebugSession extends LoggingDebugSession {
 				// fall through
 
 			default:
-				if (args.expression.startsWith('$')) {
-					rv = this._runtime.getLocalVariable(args.expression.substr(1));
-				} else {
-					rv = new RuntimeVariable('eval', this.convertToRuntime(args.expression));
-				}
+				rv = this._runtime.getLocalVariable(args.expression);
+
+				if(!rv)
+					rv = await this._runtime.getLocalSpecificVariable(args.expression);
 				break;
 		}
 

@@ -99,43 +99,19 @@ export function activateMockDebug(context: vscode.ExtensionContext, factory?: vs
 		context.subscriptions.push(factory);
 	}
 
-	// override VS Code's default implementation of the debug hover
-	// here we match only Mock "variables", that are words starting with an '$'
-	context.subscriptions.push(vscode.languages.registerEvaluatableExpressionProvider('verilog', {
-		provideEvaluatableExpression(document: vscode.TextDocument, position: vscode.Position): vscode.ProviderResult<vscode.EvaluatableExpression> {
-
-			const VARIABLE_REGEXP = /\$[a-z][a-z0-9]*/ig;
-			const line = document.lineAt(position.line).text;
-
-			let m: RegExpExecArray | null;
-			while (m = VARIABLE_REGEXP.exec(line)) {
-				const varRange = new vscode.Range(position.line, m.index, position.line, m.index + m[0].length);
-
-				if (varRange.contains(position)) {
-					return new vscode.EvaluatableExpression(varRange);
-				}
-			}
-			return undefined;
-		}
-	}));
-
 	// override VS Code's default implementation of the "inline values" feature"
 	context.subscriptions.push(vscode.languages.registerInlineValuesProvider('verilog', {
-
 		provideInlineValues(document: vscode.TextDocument, viewport: vscode.Range, context: vscode.InlineValueContext) : vscode.ProviderResult<vscode.InlineValue[]> {
-
 			const allValues: vscode.InlineValue[] = [];
 
 			for (let l = viewport.start.line; l <= context.stoppedLocation.end.line; l++) {
-				console.log(viewport.start.line + " " + context.stoppedLocation.end.line);
 				const line = document.lineAt(l);
-				var regExp = /[a-z_][a-z0-9_]*/ig;	// variables are words starting with '$'
+				var regExp = /[a-z_][a-z0-9_]*/ig;
 				do {
 					var m = regExp.exec(line.text);
 					if (m) {
 						const varName = m[1];
-						const varRange = new vscode.Range(l, line.range.end.character, l, line.range.end.character+ 4 + varName.length);
-						// FIXME: Function returns at this line for some reason
+						const varRange = new vscode.Range(l, m.index, l, m.index + varName.length);
 						// some literal text
 						//allValues.push(new vscode.InlineValueText(varRange, `${varName}: ${viewport.start.line}`));
 

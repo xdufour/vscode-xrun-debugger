@@ -554,6 +554,26 @@ export class MockRuntime extends EventEmitter {
 		return this.variables.get(name);
 	}
 
+	public async getLocalSpecificVariable(name: string): Promise<RuntimeVariable | undefined> {
+		let assignments: string[] = [];
+		let strs: string[] = [];
+		const rl = this.readline.createInterface({ input: this.ls.stdout});
+	
+		rl.on('line', (line: string) => {
+			assignments = line.split(' ');
+			assignments.forEach(it => {
+				strs = it.split('=');
+				this.variables.set(strs[0], new RuntimeVariable(strs[0], strs[1]));
+			});
+		});
+
+		this.sendSimulatorTerminalCommand("value -verbose " + name);
+		await once(rl, 'line');
+		rl.removeAllListeners();
+
+		return this.variables.get(strs[0]);
+	}
+
 	/**
 	 * Return words of the given address range as "instructions"
 	 */
