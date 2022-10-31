@@ -106,6 +106,7 @@ class EventEmitterQueue extends EventEmitter{
 }
 
 import { once } from 'node:events';
+import { time } from 'console';
 
 /**
  * A Mock runtime with minimal debugger functionality.
@@ -134,7 +135,11 @@ export class MockRuntime extends EventEmitter {
 
 	private env: string = '';
 
-	private _configurationDone = new Subject();
+	private stdout_data: string[] = [];
+
+	private line_received = new Subject();
+	private launch_done = new Subject();
+	private pending_data = new Subject();
 
 	// the contents (= lines) of the one and only file
 	private sourceLines: string[] = [];
@@ -207,7 +212,7 @@ export class MockRuntime extends EventEmitter {
 		});
 	}
 
-	public onStdOut(line: string): void{
+	public async onStdOut(line: string): Promise<void>{
 		/* Simulation has completed and initial command has been echoed back, terminate */
 		if(line.search(/\$finish;/) !== -1){
 			this.sendSimulatorTerminalCommand("exit");
@@ -222,8 +227,7 @@ export class MockRuntime extends EventEmitter {
 			this.sendSimulatorTerminalCommand("run");
 			this.sendEvent('stopOnBreakpoint');
 		}
-
-		if(line.search(/\(stop\s\d+:/) !== -1){
+		else if(line.search(/\(stop\s\d+:/) !== -1){
 			let bp_line_idx: number = line.search(/:\d+\)/);
 			let bp_line_str: string = line.substring(bp_line_idx + 1, line.length - 1);
 			let bp_file_str: string = line.substring(line.search(/\(stop\s\d+:/) + 11, bp_line_idx);
@@ -236,6 +240,16 @@ export class MockRuntime extends EventEmitter {
 			}
 			this.currentLine = parseInt(bp_line_str) - 1;
 			this.sendEvent('stopOnBreakpoint');
+		}
+		else if(line.search(/End-of-build$/) !== -1){
+			this.launch_done.notify();
+		}
+		else{
+			if(line.search(/^xcelium>\s/) !== -1){
+				line = line.substring(9);	// Remove simulator output prefix from received line
+			}
+			this.stdout_data.push(line);
+			this.pending_data.notify();
 		}
 	}
 
@@ -254,11 +268,7 @@ export class MockRuntime extends EventEmitter {
 		else
 			this.sendSimulatorTerminalCommand("./" + exe + " " + args);
 
-		/*if (debug) {
-			this.continue();
-		} else {
-			this.continue();
-		}*/
+		await this.launch_done.wait(5000);
 	}
 
 	public terminate(){
@@ -379,29 +389,27 @@ export class MockRuntime extends EventEmitter {
 		let names: string[] = [];
 		let files: string[] = [];
 		let lines: number[] = [];
-		const rl = this.readline.createInterface({ input: this.ls.stdout});
-	
-		rl.on('line', (line: string) => {
-			if(line.search(/\d.*\sat\s/) !== -1){
-				let name: string = line.substring(0, line.search(/\sat\s/));
-				let line_idx: number = line.search(/:\d+$/);
-				let line_str: string = line.substring(line_idx + 1);
-				let file_str: string = line.substring(line.search(/\sat\s/) + 4, line_idx);
-				names.push(name);
-				if(file_str.substring(0, 3) == "../") {
-					files.push(this.env.substring(0, this.env.lastIndexOf('/')) + file_str.substring(2));
+		
+		await this.sendCommandWaitResponse("stack");	
+		for(var i = 0; i < this.stdout_data.length; i++){
+			let line = this.stdout_data.shift();
+			if(line){
+				if(line.search(/\d.*\sat\s/) !== -1){
+					let name: string = line.substring(0, line.search(/\sat\s/));
+					let line_idx: number = line.search(/:\d+$/);
+					let line_str: string = line.substring(line_idx + 1);
+					let file_str: string = line.substring(line.search(/\sat\s/) + 4, line_idx);
+					names.push(name);
+					if(file_str.substring(0, 3) == "../") {
+						files.push(this.env.substring(0, this.env.lastIndexOf('/')) + file_str.substring(2));
+					}
+					else {
+						files.push(file_str);
+					}
+					lines.push(Number(line_str));
 				}
-				else {
-					files.push(file_str);
-				}
-				lines.push(Number(line_str));
 			}
-		});
-
-		this.sendSimulatorTerminalCommand("stack");
-		await once(rl, 'line');
-		rl.removeAllListeners();
-
+		}
 		const frames: IRuntimeStackFrame[] = [];
 		// every word of the current line becomes a stack frame.
 		for (let i = startFrame; i < Math.min(endFrame, names.length); i++) {
@@ -532,20 +540,17 @@ export class MockRuntime extends EventEmitter {
 	public async getLocalVariables(): Promise<RuntimeVariable[]> {
 		let assignments: string[] = [];
 		let strs: string[] = [];
-		const rl = this.readline.createInterface({ input: this.ls.stdout});
-	
-		rl.on('line', (line: string) => {
+
+		this.variables.clear();
+		await this.sendCommandWaitResponse("value -verbose *");
+		let line = this.stdout_data.shift();
+		if(line){
 			assignments = line.split(' ');
 			assignments.forEach(it => {
 				strs = it.split('=');
 				this.variables.set(strs[0], new RuntimeVariable(strs[0], strs[1]));
 			});
-		});
-
-		this.variables.clear();
-		this.sendSimulatorTerminalCommand("value -verbose *");
-		await once(rl, 'line');
-		rl.removeAllListeners();
+		}
 
 		return Array.from(this.variables, ([name, value]) => value);
 	}
@@ -557,19 +562,16 @@ export class MockRuntime extends EventEmitter {
 	public async getLocalSpecificVariable(name: string): Promise<RuntimeVariable | undefined> {
 		let assignments: string[] = [];
 		let strs: string[] = [];
-		const rl = this.readline.createInterface({ input: this.ls.stdout});
-	
-		rl.on('line', (line: string) => {
+
+		await this.sendCommandWaitResponse("value -verbose " + name);
+		let line = this.stdout_data.shift();
+		if(line){
 			assignments = line.split(' ');
 			assignments.forEach(it => {
 				strs = it.split('=');
 				this.variables.set(strs[0], new RuntimeVariable(strs[0], strs[1]));
 			});
-		});
-
-		this.sendSimulatorTerminalCommand("value -verbose " + name);
-		await once(rl, 'line');
-		rl.removeAllListeners();
+		}
 
 		return this.variables.get(strs[0]);
 	}
@@ -830,10 +832,16 @@ export class MockRuntime extends EventEmitter {
 		}
 	}
 
-	private sendSimulatorTerminalCommand(str: string){
+	private sendSimulatorTerminalCommand(cmd: string){
 		this.ls.stdin.cork();
-		this.ls.stdin.write(str + '\n');
+		this.ls.stdin.write(cmd + '\n');
 		this.ls.stdin.uncork();
-		console.log("Terminal command sent: " + str);
+		console.log("Terminal command sent: " + cmd);
+	}
+
+	private async sendCommandWaitResponse(cmd: string, timeout:number = 1000): Promise<void>{
+		this.stdout_data = [];
+		this.sendSimulatorTerminalCommand(cmd);
+		await this.pending_data.wait(timeout);
 	}
 }
