@@ -105,9 +105,6 @@ class EventEmitterQueue extends EventEmitter{
 	}
 }
 
-import { once } from 'node:events';
-import { time } from 'console';
-
 /**
  * A Mock runtime with minimal debugger functionality.
  * MockRuntime is a hypothetical (aka "Mock") "execution engine with debugging support":
@@ -137,7 +134,6 @@ export class MockRuntime extends EventEmitter {
 
 	private stdout_data: string[] = [];
 
-	private line_received = new Subject();
 	private launch_done = new Subject();
 	private pending_data = new Subject();
 
@@ -189,6 +185,17 @@ export class MockRuntime extends EventEmitter {
 		super();
 
 		this.ls.stdout.setEncoding('utf-8');
+
+		this.ls.stdout.on("data", (data: string) => {
+			let lines = data.split(/\r?\n/);
+			lines.forEach(line => {
+				if(line.search(/^xcelium>\s/) !== -1){
+					line = line.substring(9);	// Remove simulator output prefix from received line
+				}
+				this.stdout_data.push(line);
+			});
+			this.pending_data.notify();
+		});
 
 		this.readline_interface.on('line', (line: string) => {
 			console.log(line);
@@ -243,13 +250,6 @@ export class MockRuntime extends EventEmitter {
 		}
 		else if(line.search(/End-of-build$/) !== -1){
 			this.launch_done.notify();
-		}
-		else{
-			if(line.search(/^xcelium>\s/) !== -1){
-				line = line.substring(9);	// Remove simulator output prefix from received line
-			}
-			this.stdout_data.push(line);
-			this.pending_data.notify();
 		}
 	}
 
