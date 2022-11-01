@@ -63,18 +63,6 @@ export function activateMockDebug(context: vscode.ExtensionContext, factory?: vs
 		});
 	}));
 
-	context.subscriptions.push(vscode.commands.registerCommand('extension.xrun-debug.getRunSimSelection', config => {
-		return vscode.window.showQuickPick(
-			// FIXME: Remove hardcoded path
-			Object.keys(parse(fs.readFileSync("/home/cad/Design/Projects/bt005/bt005f/digital/Core_HDL_xdufour/ver" + "/config.yml", 'utf-8'))["tests"]),
-			{
-				canPickMany: false
-			}
-		).then((testName) => {
-			return "-t " + testName;
-		});
-	}));
-
 	// register a configuration provider for 'mock' debug type
 	const provider = new MockConfigurationProvider();
 	context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider('xrun', provider));
@@ -184,13 +172,20 @@ class MockConfigurationProvider implements vscode.DebugConfigurationProvider {
 	 * Massage a debug configuration just before a debug session is being launched,
 	 * e.g. add all missing attributes to the debug configuration.
 	 */
-	resolveDebugConfiguration(folder: WorkspaceFolder | undefined, config: DebugConfiguration, token?: CancellationToken): ProviderResult<DebugConfiguration> {
+	async resolveDebugConfiguration(folder: WorkspaceFolder | undefined, config: DebugConfiguration, token?: CancellationToken): Promise<vscode.DebugConfiguration | null | undefined> {
 
 		// if launch.json is missing or empty
 		if (!config.args) {
-			return vscode.window.showInformationMessage("No arguments specified").then(_ => {
-				return undefined;	// abort launch
+			let test = await vscode.window.showQuickPick(
+				// FIXME: Remove hardcoded path by adding a config.yml path
+				Object.keys(parse(fs.readFileSync("/home/cad/Design/Projects/bt005/bt005f/digital/Core_HDL_xdufour/ver" + "/config.yml", 'utf-8'))["tests"]),
+				{
+					canPickMany: false
+				}
+			).then((testName) => {
+				return Promise.resolve(testName);
 			});
+			config.args = "-t " + test;
 		}
 
 		if (!config.program) {

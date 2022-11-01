@@ -68,33 +68,12 @@
   "activationEvents": [
     "onDebugResolve:xrun",
     "onDebugDynamicConfigurations:xrun",
-    "onCommand:extension.xrun-debug.getRunSimArgs",
-    "onCommand:extension.xrun-debug.getRunSimSelection"
+    "onCommand:extension.xrun-debug.getRunSimArgs"
   ],
   "workspaceTrust": {
     "request": "never"
   },
   "contributes": {
-    "menus": {
-      "commandPalette": [
-        {
-          "command": "extension.xrun-debug.debugEditorContents",
-          "when": "resourceLangId == systemverilog"
-        },
-        {
-          "command": "extension.xrun-debug.runEditorContents",
-          "when": "resourceLangId == systemverilog"
-        },
-        {
-          "command": "extension.xrun-debug.debugEditorContents",
-          "when": "resourceLangId == verilog"
-        },
-        {
-          "command": "extension.xrun-debug.runEditorContents",
-          "when": "resourceLangId == verilog"
-        }
-      ]
-    },
     "breakpoints": [
       {
         "language": "systemverilog"
@@ -181,8 +160,7 @@
           }
         ],
         "variables": {
-          "AskForArguments": "extension.xrun-debug.getRunSimArgs",
-          "SelectTest": "extension.xrun-debug.getRunSimSelection"
+          "AskForArguments": "extension.xrun-debug.getRunSimArgs"
         }
       }
     ]
