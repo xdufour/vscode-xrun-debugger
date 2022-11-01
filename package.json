@@ -186,5 +186,9 @@
         }
       }
     ]
+  },
+  "dependencies": {
+    "fs": "^0.0.1-security",
+    "yaml": "^2.1.3"
   }
 }

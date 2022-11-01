@@ -11,6 +11,8 @@ import * as vscode from 'vscode';
 import { WorkspaceFolder, DebugConfiguration, ProviderResult, CancellationToken } from 'vscode';
 import { MockDebugSession } from './mockDebug';
 import { FileAccessor } from './mockRuntime';
+import * as fs from 'fs';
+import { parse } from 'yaml';
 
 export function activateMockDebug(context: vscode.ExtensionContext, factory?: vscode.DebugAdapterDescriptorFactory) {
 
@@ -63,7 +65,8 @@ export function activateMockDebug(context: vscode.ExtensionContext, factory?: vs
 
 	context.subscriptions.push(vscode.commands.registerCommand('extension.xrun-debug.getRunSimSelection', config => {
 		return vscode.window.showQuickPick(
-			["wfg1", "wfg2", "peripherals"],
+			// FIXME: Remove hardcoded path
+			Object.keys(parse(fs.readFileSync("/home/cad/Design/Projects/bt005/bt005f/digital/Core_HDL_xdufour/ver" + "/config.yml", 'utf-8'))["tests"]),
 			{
 				canPickMany: false
 			}
@@ -184,15 +187,10 @@ class MockConfigurationProvider implements vscode.DebugConfigurationProvider {
 	resolveDebugConfiguration(folder: WorkspaceFolder | undefined, config: DebugConfiguration, token?: CancellationToken): ProviderResult<DebugConfiguration> {
 
 		// if launch.json is missing or empty
-		if (!config.type && !config.request && !config.name) {
-			const editor = vscode.window.activeTextEditor;
-			if (editor && editor.document.languageId === 'systemverilog' || editor?.document.languageId === 'verilog') {
-				config.type = 'xrun';
-				config.name = 'Launch';
-				config.request = 'launch';
-				config.program = '${file}';
-				config.stopOnEntry = true;
-			}
+		if (!config.args) {
+			return vscode.window.showInformationMessage("No arguments specified").then(_ => {
+				return undefined;	// abort launch
+			});
 		}
 
 		if (!config.program) {
