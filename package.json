@@ -69,36 +69,13 @@
     "onDebugResolve:xrun",
     "onDebugDynamicConfigurations:xrun",
     "onCommand:extension.xrun-debug.getRunSimArgs",
-    "onCommand:extension.xrun-debug.runEditorContents",
-    "onCommand:extension.xrun-debug.debugEditorContents"
+    "onCommand:extension.xrun-debug.getRunSimSelection"
   ],
   "workspaceTrust": {
     "request": "never"
   },
   "contributes": {
     "menus": {
-      "editor/title/run": [
-        {
-          "command": "extension.xrun-debug.runEditorContents",
-          "when": "resourceLangId == systemverilog",
-          "group": "navigation@1"
-        },
-        {
-          "command": "extension.xrun-debug.debugEditorContents",
-          "when": "resourceLangId == systemverilog",
-          "group": "navigation@2"
-        },
-        {
-          "command": "extension.xrun-debug.runEditorContents",
-          "when": "resourceLangId == verilog",
-          "group": "navigation@1"
-        },
-        {
-          "command": "extension.xrun-debug.debugEditorContents",
-          "when": "resourceLangId == verilog",
-          "group": "navigation@2"
-        }
-      ],
       "commandPalette": [
         {
           "command": "extension.xrun-debug.debugEditorContents",
@@ -116,34 +93,8 @@
           "command": "extension.xrun-debug.runEditorContents",
           "when": "resourceLangId == verilog"
         }
-      ],
-      "debug/variables/context": [
-        {
-          "command": "extension.xrun-debug.toggleFormatting",
-          "when": "debugType == 'xrun' && debugProtocolVariableMenuContext == 'simple'"
-        }
       ]
     },
-    "commands": [
-      {
-        "command": "extension.xrun-debug.debugEditorContents",
-        "title": "Debug File",
-        "category": "Xrun Debug",
-        "enablement": "!inDebugMode",
-        "icon": "$(debug-alt)"
-      },
-      {
-        "command": "extension.xrun-debug.runEditorContents",
-        "title": "Run File",
-        "category": "Xrun Debug",
-        "enablement": "!inDebugMode",
-        "icon": "$(play)"
-      },
-      {
-        "command": "extension.xrun-debug.toggleFormatting",
-        "title": "Toggle between decimal and hex formatting"
-      }
-    ],
     "breakpoints": [
       {
         "language": "systemverilog"
@@ -230,7 +181,8 @@
           }
         ],
         "variables": {
-          "AskForArguments": "extension.xrun-debug.getRunSimArgs"
+          "AskForArguments": "extension.xrun-debug.getRunSimArgs",
+          "SelectTest": "extension.xrun-debug.getRunSimSelection"
         }
       }
     ]

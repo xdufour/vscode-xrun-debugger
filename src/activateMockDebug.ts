@@ -14,7 +14,7 @@ import { FileAccessor } from './mockRuntime';
 
 export function activateMockDebug(context: vscode.ExtensionContext, factory?: vscode.DebugAdapterDescriptorFactory) {
 
-	context.subscriptions.push(
+	/* context.subscriptions.push(
 		vscode.commands.registerCommand('extension.xrun-debug.runEditorContents', (resource: vscode.Uri) => {
 			let targetResource = resource;
 			if (!targetResource && vscode.window.activeTextEditor) {
@@ -52,12 +52,23 @@ export function activateMockDebug(context: vscode.ExtensionContext, factory?: vs
 				ds.customRequest('toggleFormatting');
 			}
 		})
-	);
+	); */
 
 	context.subscriptions.push(vscode.commands.registerCommand('extension.xrun-debug.getRunSimArgs', config => {
 		return vscode.window.showInputBox({
 			placeHolder: "Please enter all config options for run_sim.sh",
 			value: "-t wfg1"
+		});
+	}));
+
+	context.subscriptions.push(vscode.commands.registerCommand('extension.xrun-debug.getRunSimSelection', config => {
+		return vscode.window.showQuickPick(
+			["wfg1", "wfg2", "peripherals"],
+			{
+				canPickMany: false
+			}
+		).then((testName) => {
+			return "-t " + testName;
 		});
 	}));
 
