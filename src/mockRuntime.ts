@@ -569,11 +569,11 @@ export class MockRuntime extends EventEmitter {
 			assignments = line.split(' ');
 			assignments.forEach(it => {
 				strs = it.split('=');
-				this.variables.set(strs[0], new RuntimeVariable(strs[0], strs[1]));
+				this.variables.set(name, new RuntimeVariable(name, strs[1]));
 			});
 		}
 
-		return this.variables.get(strs[0]);
+		return this.variables.get(name);
 	}
 
 	/**

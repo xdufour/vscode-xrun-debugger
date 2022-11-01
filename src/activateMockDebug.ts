@@ -99,12 +99,47 @@ export function activateMockDebug(context: vscode.ExtensionContext, factory?: vs
 		context.subscriptions.push(factory);
 	}
 
+	// override VS Code's default implementation of the debug hover
+	context.subscriptions.push(vscode.languages.registerEvaluatableExpressionProvider('systemverilog', {
+		provideEvaluatableExpression(document: vscode.TextDocument, position: vscode.Position): vscode.ProviderResult<vscode.EvaluatableExpression> {
+
+			const VARIABLE_REGEXP = /[a-z_\.][a-z0-9_]*/ig;
+			const line = document.lineAt(position.line).text;
+
+			let m: RegExpExecArray | null;
+			while (m = VARIABLE_REGEXP.exec(line)) {
+				let startIndex: number = 0;
+				if(m[0].charAt(0) == '.'){
+					let expressionIdx = line.search(/[a-z_][a-z0-9_\[\]]*\./);
+					if(expressionIdx !== -1){
+						startIndex = expressionIdx;
+					}
+				}
+				else {
+					startIndex = m.index;
+				}
+				const varRange = new vscode.Range(position.line, startIndex, position.line, m.index + m[0].length);
+
+				let expression:string = line.substring(startIndex, m.index + m[0].length);
+				if(expression.search(/\[.*\]/) !== -1){
+					// FIXME: This eventually could query for the full array (will need to be done from within the DAP/runtime to provide array view)
+					expression = expression.replace(/\[.*\]/, '[0]');
+				}
+
+				if (varRange.contains(position)) {
+					return new vscode.EvaluatableExpression(varRange, expression);
+				}
+			}
+			return undefined;
+		}
+	}));
+
 	// override VS Code's default implementation of the "inline values" feature"
 	context.subscriptions.push(vscode.languages.registerInlineValuesProvider('verilog', {
 		provideInlineValues(document: vscode.TextDocument, viewport: vscode.Range, context: vscode.InlineValueContext) : vscode.ProviderResult<vscode.InlineValue[]> {
 			const allValues: vscode.InlineValue[] = [];
 
-			for (let l = viewport.start.line; l <= context.stoppedLocation.end.line; l++) {
+			for (let l = viewport.start.line; l <= viewport.end.line; l++) {
 				const line = document.lineAt(l);
 				var regExp = /[a-z_][a-z0-9_]*/ig;
 				do {
