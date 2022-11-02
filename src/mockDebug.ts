@@ -110,13 +110,15 @@ export class MockDebugSession extends LoggingDebugSession {
 			this.sendEvent(new BreakpointEvent('changed', { verified: bp.verified, id: bp.id } as DebugProtocol.Breakpoint));
 		});
 		this._runtime.on('output', (type, text, filePath, line, column) => {
-
 			let category: string;
 			switch(type) {
 				case 'prio': category = 'important'; break;
 				case 'out': category = 'stdout'; break;
 				case 'err': category = 'stderr'; break;
 				default: category = 'console'; break;
+			}
+			if(text.search(/UVM_ERROR/) !== -1){
+				category = 'stderr';
 			}
 			const e: DebugProtocol.OutputEvent = new OutputEvent(`${text}\n`, category);
 
@@ -131,6 +133,8 @@ export class MockDebugSession extends LoggingDebugSession {
 			this.sendEvent(e);
 		});
 		this._runtime.on('end', () => {
+			const e: DebugProtocol.OutputEvent = new OutputEvent('[Xrun-Debug] Simulation ended, terminating xrun host process\n', 'important');
+			this.sendEvent(e);
 			this.sendEvent(new TerminatedEvent());
 		});
 	}
@@ -219,6 +223,8 @@ export class MockDebugSession extends LoggingDebugSession {
 
 	protected disconnectRequest(response: DebugProtocol.DisconnectResponse, args: DebugProtocol.DisconnectArguments, request?: DebugProtocol.Request): void {
 		if(args.terminateDebuggee) {
+			const e: DebugProtocol.OutputEvent = new OutputEvent('[Xrun-Debug] Simulation aborted, terminating xrun host process\n', 'important');
+			this.sendEvent(e);
 			this._runtime.terminate();
 		}
 		

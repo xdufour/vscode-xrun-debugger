@@ -4,6 +4,7 @@
 
 import { EventEmitter } from 'events';
 import { Subject } from 'await-notify';
+import { deflateSync } from 'zlib';
 
 export interface FileAccessor {
 	isWindows: boolean;
@@ -198,7 +199,7 @@ export class MockRuntime extends EventEmitter {
 		});
 
 		this.readline_interface.on('line', (line: string) => {
-			console.log(line);
+			this.sendEvent("output", "out", line, "", 0, 0);
 			this.queue.push(line);
 		});
 		
@@ -224,8 +225,7 @@ export class MockRuntime extends EventEmitter {
 		if(line.search(/\$finish;/) !== -1){
 			this.sendSimulatorTerminalCommand("exit");
 		}
-		else if(line.search('./run_sim.sh') !== -1){
-			console.log('[Xrun-debug Extension] Simulation ended, terminating shell process');
+		else if(line.search('./run_sim.sh') !== -1){ // FIXME: Remove hardcoded way of detecting end of execution
 			this.ls.kill();
 			this.sendEvent('end');
 		}
