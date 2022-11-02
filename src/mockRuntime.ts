@@ -4,7 +4,6 @@
 
 import { EventEmitter } from 'events';
 import { Subject } from 'await-notify';
-import { deflateSync } from 'zlib';
 
 export interface FileAccessor {
 	isWindows: boolean;

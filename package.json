@@ -110,6 +110,11 @@
                 "description": "Command line arguments. Can optionally be a path to a yml file to parse for arguments selection to be displayed, or use \"${command:AskForArguments}\" to manually enter them upon launch.",
                 "default": ""
               },
+              "consoleKeywords": {
+                "type": "array",
+                "description": "Keywords to highlight in console output during a debugging session",
+                "default": []
+              },
               "stopOnEntry": {
                 "type": "boolean",
                 "description": "Automatically stop after launch",

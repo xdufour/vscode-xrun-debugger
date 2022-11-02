@@ -27,7 +27,7 @@ import { LogLevel } from '@vscode/debugadapter/lib/logger';
 /**
  * This interface describes the xrun-debug specific launch attributes
  * (which are not part of the Debug Adapter Protocol).
- * The schema for these attributes lives in the package.json of the mock-debug extension.
+ * The schema for these attributes lives in the package.json of the xrun-debug extension.
  * The interface should always match this schema.
  */
 interface ILaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
@@ -35,8 +35,10 @@ interface ILaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
 	env: string;
 	/** Absolute path to xrun script executable, or relative path if 'env' is specified */
 	program: string;
-	/** Command line arguments. Can optionally be a path to a yml file to parse for arguments selection to be displayed, or use \"\\${command:AskForArguments}\" to manually enter them upon launch. */
+	/** Command line arguments. Can optionally be a path to a yml file to parse for arguments selection to be displayed, or use \"${command:AskForArguments}\" to manually enter them upon launch. */
 	args: string;
+	/** Keywords to highlight in console output during a debugging session */
+	consoleKeywords: string[];
 	/** Automatically stop target after launch. If not specified, target does not stop. */
 	stopOnEntry?: boolean;
 	/** Run without debugging */
@@ -55,6 +57,8 @@ export class MockDebugSession extends LoggingDebugSession {
 	private _runtime: MockRuntime;
 
 	private _variableHandles = new Handles<'locals' | 'globals' | RuntimeVariable>();
+
+	private consoleKeywords: string[] = [];
 
 	private _configurationDone = new Subject();
 
@@ -109,7 +113,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		this._runtime.on('breakpointValidated', (bp: IRuntimeBreakpoint) => {
 			this.sendEvent(new BreakpointEvent('changed', { verified: bp.verified, id: bp.id } as DebugProtocol.Breakpoint));
 		});
-		this._runtime.on('output', (type, text, filePath, line, column) => {
+		this._runtime.on('output', (type, text: string, filePath, line, column) => {
 			let category: string;
 			switch(type) {
 				case 'prio': category = 'important'; break;
@@ -117,9 +121,12 @@ export class MockDebugSession extends LoggingDebugSession {
 				case 'err': category = 'stderr'; break;
 				default: category = 'console'; break;
 			}
-			if(text.search(/UVM_ERROR/) !== -1){
-				category = 'stderr';
-			}
+			this.consoleKeywords.forEach((keyword: string) => {
+				if(text.search(keyword) !== -1){
+					category = 'stderr';
+				}
+			});
+			
 			const e: DebugProtocol.OutputEvent = new OutputEvent(`${text}\n`, category);
 
 			if (text === 'start' || text === 'startCollapsed' || text === 'end') {
@@ -240,6 +247,8 @@ export class MockDebugSession extends LoggingDebugSession {
 		// make sure to 'Stop' the buffered logging if 'trace' is not set
 		//logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
 		logger.setup(LogLevel.Verbose, false);
+
+		this.consoleKeywords = args.consoleKeywords;
 
 		// start the program in the runtime
 		await this._runtime.start(args.env, args.program, args.args, !!args.stopOnEntry, !args.noDebug);
