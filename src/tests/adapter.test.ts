@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import assert = require('assert');
+/* import assert = require('assert');
 import * as Path from 'path';
 import {DebugClient} from '@vscode/debugadapter-testsupport';
 import {DebugProtocol} from '@vscode/debugprotocol';
@@ -137,4 +137,4 @@ suite('Node Debug Adapter', () => {
 			]);
 		});
 	});
-});
+}); */

@@ -22,26 +22,25 @@ import { basename } from 'path-browserify';
 import { MockRuntime, IRuntimeBreakpoint, FileAccessor, RuntimeVariable, timeout, IRuntimeVariableType } from './mockRuntime';
 import { Subject } from 'await-notify';
 import * as base64 from 'base64-js';
+import { LogLevel } from '@vscode/debugadapter/lib/logger';
 
 /**
- * This interface describes the mock-debug specific launch attributes
+ * This interface describes the xrun-debug specific launch attributes
  * (which are not part of the Debug Adapter Protocol).
  * The schema for these attributes lives in the package.json of the mock-debug extension.
  * The interface should always match this schema.
  */
 interface ILaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
-	/** An absolute path to the "program" to debug. */
+	/** Absolute path to working directory */
+	env: string;
+	/** Absolute path to xrun script executable, or relative path if 'env' is specified */
 	program: string;
-	/** Arguments to pass to the xrun script */
+	/** Command line arguments. Can optionally be a path to a yml file to parse for arguments selection to be displayed, or use \"\\${command:AskForArguments}\" to manually enter them upon launch. */
 	args: string;
 	/** Automatically stop target after launch. If not specified, target does not stop. */
 	stopOnEntry?: boolean;
-	/** enable logging the Debug Adapter Protocol */
-	trace?: boolean;
-	/** run without debugging */
+	/** Run without debugging */
 	noDebug?: boolean;
-	/** if specified, results in a simulated compile error in launch. */
-	compileError?: 'default' | 'show' | 'hide';
 }
 
 interface IAttachRequestArguments extends ILaunchRequestArguments { }
@@ -177,28 +176,8 @@ export class MockDebugSession extends LoggingDebugSession {
 		// make VS Code provide "Step in Target" functionality
 		response.body.supportsStepInTargetsRequest = true;
 
-		// the adapter defines two exceptions filters, one with support for conditions.
-		response.body.supportsExceptionFilterOptions = false;
-		response.body.exceptionBreakpointFilters = [
-			{
-				filter: 'namedException',
-				label: "Named Exception",
-				description: `Break on named exceptions. Enter the exception's name as the Condition.`,
-				default: false,
-				supportsCondition: true,
-				conditionDescription: `Enter the exception's name`
-			},
-			{
-				filter: 'otherExceptions',
-				label: "Other Exceptions",
-				description: 'This is a other exception',
-				default: true,
-				supportsCondition: false
-			}
-		];
-
 		// make VS Code send exceptionInfo request
-		response.body.supportsExceptionInfoRequest = true;
+		response.body.supportsExceptionInfoRequest = false;
 
 		// make VS Code send setVariable request
 		response.body.supportsSetVariable = true;
@@ -212,8 +191,8 @@ export class MockDebugSession extends LoggingDebugSession {
 		response.body.supportsInstructionBreakpoints = true;
 
 		// make VS Code able to read and write variable memory
-		response.body.supportsReadMemoryRequest = true;
-		response.body.supportsWriteMemoryRequest = true;
+		response.body.supportsReadMemoryRequest = false;
+		response.body.supportsWriteMemoryRequest = false;
 
 		response.body.supportSuspendDebuggee = true;
 		response.body.supportTerminateDebuggee = true;
@@ -253,26 +232,16 @@ export class MockDebugSession extends LoggingDebugSession {
 	protected async launchRequest(response: DebugProtocol.LaunchResponse, args: ILaunchRequestArguments) {
 
 		// make sure to 'Stop' the buffered logging if 'trace' is not set
-		logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
+		//logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
+		logger.setup(LogLevel.Verbose, false);
 
 		// start the program in the runtime
-		await this._runtime.start(args.program, args.args, !!args.stopOnEntry, !args.noDebug);
+		await this._runtime.start(args.env, args.program, args.args, !!args.stopOnEntry, !args.noDebug);
 
 		// wait 1 second until configuration has finished (and configurationDoneRequest has been called)
 		await this._configurationDone.wait(1000);
 
-		if (args.compileError) {
-			// simulate a compile/build error in "launch" request:
-			// the error should not result in a modal dialog since 'showUser' is set to false.
-			// A missing 'showUser' should result in a modal dialog.
-			this.sendErrorResponse(response, {
-				id: 1001,
-				format: `compile error: some fake error.`,
-				showUser: args.compileError === 'show' ? true : (args.compileError === 'hide' ? false : undefined)
-			});
-		} else {
-			this.sendResponse(response);
-		}
+		this.sendResponse(response);
 	}
 
 	protected setFunctionBreakPointsRequest(response: DebugProtocol.SetFunctionBreakpointsResponse, args: DebugProtocol.SetFunctionBreakpointsArguments, request?: DebugProtocol.Request): void {

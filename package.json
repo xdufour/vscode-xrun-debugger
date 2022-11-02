@@ -21,10 +21,7 @@
   "private": true,
   "repository": {
     "type": "git",
-    "url": "https://github.com/Microsoft/vscode-mock-debug.git"
-  },
-  "bugs": {
-    "url": "https://github.com/Microsoft/vscode-mock-debug/issues"
+    "url": "https://github.com/xdufour/vscode-xrun-debugger.git"
   },
   "scripts": {
     "compile": "tsc -p ./",
@@ -98,39 +95,30 @@
               "program"
             ],
             "properties": {
+              "env": {
+                "type": "string",
+                "description": "Absolute path to working directory",
+                "default": "${workspaceFolder}"
+              },
               "program": {
                 "type": "string",
-                "description": "Absolute path to xrun pre-launch config script",
+                "description": "Absolute path to xrun script executable, or relative path if 'env' is specified",
                 "default": ""
               },
               "args": {
                 "type": "string",
-                "description": "Command line arguments for xrun",
+                "description": "Command line arguments. Can optionally be a path to a yml file to parse for arguments selection to be displayed, or use \"${command:AskForArguments}\" to manually enter them upon launch.",
                 "default": ""
               },
               "stopOnEntry": {
                 "type": "boolean",
-                "description": "Automatically stop after launch.",
+                "description": "Automatically stop after launch",
                 "default": true
               },
-              "trace": {
+              "noDebug": {
                 "type": "boolean",
-                "description": "Enable logging of the Debug Adapter Protocol.",
-                "default": true
-              },
-              "compileError": {
-                "type": "string",
-                "description": "Simulates a compile error in 'launch' request.",
-                "enum": [
-                  "default",
-                  "show",
-                  "hide"
-                ],
-                "enumDescriptions": [
-                  "default: show fake compile error to user",
-                  "show fake compile error to user",
-                  "do not show fake compile error to user"
-                ]
+                "description": "Run simulation without debug",
+                "default": false
               }
             }
           }
@@ -140,7 +128,8 @@
             "type": "xrun",
             "request": "launch",
             "name": "Manual",
-            "program": "/home/cad/Design/Projects/bt005/bt005f/digital/Core_HDL_xdufour/ver/run_sim.sh",
+            "env": "${workspaceFolder}",
+            "program": "Path to xrun script",
             "args": "${command:AskForArguments}",
             "stopOnEntry": true
           }
@@ -148,12 +137,13 @@
         "configurationSnippets": [
           {
             "label": "Xrun Debug: Launch",
-            "description": "A new configuration for 'debugging' a user selected markdown file.",
+            "description": "A new configuration for 'debugging' a user selected SystemVerilog simulation",
             "body": {
               "type": "xrun",
               "request": "launch",
               "name": "Manual",
-              "program": "/home/cad/Design/Projects/bt005/bt005f/digital/Core_HDL_xdufour/ver/run_sim.sh",
+              "env": "${workspaceFolder}",
+              "program": "run_sim.sh",
               "args": "^\"\\${command:AskForArguments}\"",
               "stopOnEntry": true
             }

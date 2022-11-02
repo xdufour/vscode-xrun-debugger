@@ -257,16 +257,15 @@ export class MockRuntime extends EventEmitter {
 	/**
 	 * Start executing the given program.
 	 */
-	public async start(program: string, args: string, stopOnEntry: boolean, debug: boolean): Promise<void> {
-		this.env = program.substring(0, program.lastIndexOf('/'));
-		let exe = program.substring(program.lastIndexOf('/') + 1);
+	public async start(env:string, program: string, args: string, stopOnEntry: boolean, debug: boolean): Promise<void> {
+		this.env = env;
 		
 		this.sendSimulatorTerminalCommand("cd " + this.env);
 
 		if(debug) 
-			this.sendSimulatorTerminalCommand("./" + exe + " " + args + " -i");
+			this.sendSimulatorTerminalCommand("./" + program + " " + args + " -i");
 		else
-			this.sendSimulatorTerminalCommand("./" + exe + " " + args);
+			this.sendSimulatorTerminalCommand("./" + program + " " + args);
 
 		await this.launch_done.wait(5000);
 	}

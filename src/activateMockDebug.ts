@@ -15,47 +15,6 @@ import * as fs from 'fs';
 import { parse } from 'yaml';
 
 export function activateMockDebug(context: vscode.ExtensionContext, factory?: vscode.DebugAdapterDescriptorFactory) {
-
-	/* context.subscriptions.push(
-		vscode.commands.registerCommand('extension.xrun-debug.runEditorContents', (resource: vscode.Uri) => {
-			let targetResource = resource;
-			if (!targetResource && vscode.window.activeTextEditor) {
-				targetResource = vscode.window.activeTextEditor.document.uri;
-			}
-			if (targetResource) {
-				vscode.debug.startDebugging(undefined, {
-					type: 'xrun',
-					name: 'Run File',
-					request: 'launch',
-					program: targetResource.fsPath
-				},
-					{ noDebug: true }
-				);
-			}
-		}),
-		vscode.commands.registerCommand('extension.xrun-debug.debugEditorContents', (resource: vscode.Uri) => {
-			let targetResource = resource;
-			if (!targetResource && vscode.window.activeTextEditor) {
-				targetResource = vscode.window.activeTextEditor.document.uri;
-			}
-			if (targetResource) {
-				vscode.debug.startDebugging(undefined, {
-					type: 'xrun',
-					name: 'Debug File',
-					request: 'launch',
-					program: targetResource.fsPath,
-					stopOnEntry: true
-				});
-			}
-		}),
-		vscode.commands.registerCommand('extension.xrun-debug.toggleFormatting', (variable) => {
-			const ds = vscode.debug.activeDebugSession;
-			if (ds) {
-				ds.customRequest('toggleFormatting');
-			}
-		})
-	); */
-
 	context.subscriptions.push(vscode.commands.registerCommand('extension.xrun-debug.getRunSimArgs', config => {
 		return vscode.window.showInputBox({
 			placeHolder: "Please enter all config options for run_sim.sh",
@@ -68,7 +27,7 @@ export function activateMockDebug(context: vscode.ExtensionContext, factory?: vs
 	context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider('xrun', provider));
 
 	// register a dynamic configuration provider for 'mock' debug type
-	context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider('xrun', {
+	/*context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider('xrun', {
 		provideDebugConfigurations(folder: WorkspaceFolder | undefined): ProviderResult<DebugConfiguration[]> {
 			return [
 				{
@@ -91,7 +50,7 @@ export function activateMockDebug(context: vscode.ExtensionContext, factory?: vs
 				}
 			];
 		}
-	}, vscode.DebugConfigurationProviderTriggerKind.Dynamic));
+	}, vscode.DebugConfigurationProviderTriggerKind.Dynamic));*/
 
 	if (!factory) {
 		factory = new InlineDebugAdapterFactory();
@@ -175,10 +134,9 @@ class MockConfigurationProvider implements vscode.DebugConfigurationProvider {
 	async resolveDebugConfiguration(folder: WorkspaceFolder | undefined, config: DebugConfiguration, token?: CancellationToken): Promise<vscode.DebugConfiguration | null | undefined> {
 
 		// if launch.json is missing or empty
-		if (!config.args) {
+		if (config.args && config.args.search(/.*\.yml$/) !== -1) {
 			let test = await vscode.window.showQuickPick(
-				// FIXME: Remove hardcoded path by adding a config.yml path
-				Object.keys(parse(fs.readFileSync("/home/cad/Design/Projects/bt005/bt005f/digital/Core_HDL_xdufour/ver" + "/config.yml", 'utf-8'))["tests"]),
+				Object.keys(parse(fs.readFileSync(config.env + '/' + config.args, 'utf-8'))["tests"]),
 				{
 					canPickMany: false
 				}
