@@ -535,7 +535,7 @@ export class MockRuntime extends EventEmitter {
 		return a;
 	}
 
-	public async getLocalVariables(): Promise<RuntimeVariable[]> {
+	public async fetchVariables(): Promise<RuntimeVariable[]> {
 		let assignments: string[] = [];
 		let strs: string[] = [];
 
@@ -553,11 +553,7 @@ export class MockRuntime extends EventEmitter {
 		return Array.from(this.variables, ([name, value]) => value);
 	}
 
-	public getLocalVariable(name: string): RuntimeVariable | undefined {
-		return this.variables.get(name);
-	}
-
-	public async getLocalSpecificVariable(name: string): Promise<RuntimeVariable | undefined> {
+	public async fetchVariable(name: string): Promise<RuntimeVariable | undefined> {
 		let assignments: string[] = [];
 		let strs: string[] = [];
 
@@ -571,6 +567,10 @@ export class MockRuntime extends EventEmitter {
 			});
 		}
 
+		return this.variables.get(name);
+	}
+
+	public getVariable(name: string): RuntimeVariable | undefined {
 		return this.variables.get(name);
 	}
 

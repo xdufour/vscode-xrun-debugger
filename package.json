@@ -2,10 +2,10 @@
   "name": "xrun-debug",
   "displayName": "Xrun Debug",
   "version": "0.0.1",
-  "publisher": "boreas-xdufour",
+  "publisher": "boreas-technologies",
   "description": "Extension for debugging Verilog/SystemVerilog Xcelium simulations",
   "author": {
-    "name": "Xavier Dufour    "
+    "name": "Xavier Dufour"
   },
   "license": "MIT",
   "keywords": [
@@ -14,7 +14,7 @@
   "engines": {
     "vscode": "^1.66.0"
   },
-  "icon": "images/mock-debug-icon.png",
+  "icon": "images/boreas.ico",
   "categories": [
     "Debuggers"
   ],

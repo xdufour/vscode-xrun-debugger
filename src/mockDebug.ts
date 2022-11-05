@@ -448,7 +448,7 @@ export class MockDebugSession extends LoggingDebugSession {
 
 		const v = this._variableHandles.get(args.variablesReference);
 		if (v === 'locals') {
-			vs = await this._runtime.getLocalVariables();
+			vs = await this._runtime.fetchVariables();
 		} else if (v === 'globals') {
 			if (request) {
 				this._cancellationTokens.set(request.seq, false);
@@ -470,7 +470,7 @@ export class MockDebugSession extends LoggingDebugSession {
 	protected setVariableRequest(response: DebugProtocol.SetVariableResponse, args: DebugProtocol.SetVariableArguments): void {
 		const container = this._variableHandles.get(args.variablesReference);
 		const rv = container === 'locals'
-			? this._runtime.getLocalVariable(args.name)
+			? this._runtime.getVariable(args.name)
 			: container instanceof RuntimeVariable && container.value instanceof Array
 			? container.value.find(v => v.name === args.name)
 			: undefined;
@@ -529,44 +529,13 @@ export class MockDebugSession extends LoggingDebugSession {
 
 		switch (args.context) {
 			case 'repl':
-				// handle some REPL commands:
-				// 'evaluate' supports to create and delete breakpoints from the 'repl':
-				const matches = /new +([0-9]+)/.exec(args.expression);
-				if (matches && matches.length === 2) {
-					const mbp = await this._runtime.setBreakPoint(this._runtime.sourceFile, this.convertClientLineToDebugger(parseInt(matches[1])));
-					const bp = new Breakpoint(mbp.verified, this.convertDebuggerLineToClient(mbp.line), undefined, this.createSource(this._runtime.sourceFile)) as DebugProtocol.Breakpoint;
-					bp.id= mbp.id;
-					this.sendEvent(new BreakpointEvent('new', bp));
-					reply = `breakpoint created`;
-				} else {
-					const matches = /del +([0-9]+)/.exec(args.expression);
-					if (matches && matches.length === 2) {
-						const mbp = this._runtime.clearBreakPoint(this._runtime.sourceFile, this.convertClientLineToDebugger(parseInt(matches[1])));
-						if (mbp) {
-							const bp = new Breakpoint(false) as DebugProtocol.Breakpoint;
-							bp.id= mbp.id;
-							this.sendEvent(new BreakpointEvent('removed', bp));
-							reply = `breakpoint deleted`;
-						}
-					} else {
-						const matches = /progress/.exec(args.expression);
-						if (matches && matches.length === 1) {
-							if (this._reportProgress) {
-								reply = `progress started`;
-								this.progressSequence();
-							} else {
-								reply = `frontend doesn't support progress (capability 'supportsProgressReporting' not set)`;
-							}
-						}
-					}
-				}
-				// fall through
-
-			default:
-				rv = this._runtime.getLocalVariable(args.expression);
+			case 'hover':
+			case 'variables':
+			case 'watch':
+				rv = this._runtime.getVariable(args.expression);
 
 				if(!rv)
-					rv = await this._runtime.getLocalSpecificVariable(args.expression);
+					rv = await this._runtime.fetchVariable(args.expression);
 				break;
 		}
 
@@ -591,7 +560,7 @@ export class MockDebugSession extends LoggingDebugSession {
 	protected setExpressionRequest(response: DebugProtocol.SetExpressionResponse, args: DebugProtocol.SetExpressionArguments): void {
 
 		if (args.expression.startsWith('$')) {
-			const rv = this._runtime.getLocalVariable(args.expression.substr(1));
+			const rv = this._runtime.getVariable(args.expression.substr(1));
 			if (rv) {
 				rv.value = this.convertToRuntime(args.value);
 				response.body = this.convertFromRuntime(rv);
