@@ -11,17 +11,16 @@
  */
 
 import {
-	Logger, logger,
+	logger,
 	LoggingDebugSession,
 	InitializedEvent, TerminatedEvent, StoppedEvent, BreakpointEvent, OutputEvent,
 	ProgressStartEvent, ProgressUpdateEvent, ProgressEndEvent, InvalidatedEvent,
-	Thread, StackFrame, Scope, Source, Handles, Breakpoint, MemoryEvent
+	Thread, StackFrame, Scope, Source, Handles, Breakpoint
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { basename } from 'path-browserify';
-import { MockRuntime, IRuntimeBreakpoint, FileAccessor, RuntimeVariable, timeout, IRuntimeVariableType } from './mockRuntime';
+import { MockRuntime, IRuntimeBreakpoint, FileAccessor, RuntimeVariable, timeout } from './mockRuntime';
 import { Subject } from 'await-notify';
-import * as base64 from 'base64-js';
 import { LogLevel } from '@vscode/debugadapter/lib/logger';
 
 /**
@@ -56,7 +55,7 @@ export class MockDebugSession extends LoggingDebugSession {
 	// a Mock runtime (or debugger)
 	private _runtime: MockRuntime;
 
-	private _variableHandles = new Handles<'locals' | 'globals' | RuntimeVariable>();
+	private _variableHandles = new Handles<string>();
 
 	private consoleKeywords: string[] = [];
 
@@ -307,35 +306,6 @@ export class MockDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
-	protected async setExceptionBreakPointsRequest(response: DebugProtocol.SetExceptionBreakpointsResponse, args: DebugProtocol.SetExceptionBreakpointsArguments): Promise<void> {
-
-		let namedException: string | undefined = undefined;
-		let otherExceptions = false;
-
-		if (args.filterOptions) {
-			for (const filterOption of args.filterOptions) {
-				switch (filterOption.filterId) {
-					case 'namedException':
-						namedException = args.filterOptions[0].condition;
-						break;
-					case 'otherExceptions':
-						otherExceptions = true;
-						break;
-				}
-			}
-		}
-
-		if (args.filters) {
-			if (args.filters.indexOf('otherExceptions') >= 0) {
-				otherExceptions = true;
-			}
-		}
-
-		this._runtime.setExceptionsFilters(namedException, otherExceptions);
-
-		this.sendResponse(response);
-	}
-
 	protected exceptionInfoRequest(response: DebugProtocol.ExceptionInfoResponse, args: DebugProtocol.ExceptionInfoArguments) {
 		response.body = {
 			exceptionId: 'Exception ID',
@@ -355,8 +325,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		// runtime supports no threads so just return a default thread.
 		response.body = {
 			threads: [
-				new Thread(MockDebugSession.threadID, "thread 1"),
-				new Thread(MockDebugSession.threadID + 1, "thread 2"),
+				new Thread(MockDebugSession.threadID, "thread 1")
 			]
 		};
 		this.sendResponse(response);
@@ -395,16 +364,20 @@ export class MockDebugSession extends LoggingDebugSession {
 
 	protected scopesRequest(response: DebugProtocol.ScopesResponse, args: DebugProtocol.ScopesArguments): void {
 
+		this._variableHandles.reset();
+		let scopes_str: string[] = this._runtime.getScopes();
+		let scopes: DebugProtocol.Scope[] = [];
+
+		scopes_str.map((s) => {
+			scopes.push(new Scope(s, this._variableHandles.create(s), false));
+		});
 		response.body = {
-			scopes: [
-				new Scope("Locals", this._variableHandles.create('locals'), false),
-				new Scope("Globals", this._variableHandles.create('globals'), true)
-			]
+			scopes: scopes
 		};
 		this.sendResponse(response);
 	}
 
-	protected async writeMemoryRequest(response: DebugProtocol.WriteMemoryResponse, { data, memoryReference, offset = 0 }: DebugProtocol.WriteMemoryArguments) {
+	/*protected async writeMemoryRequest(response: DebugProtocol.WriteMemoryResponse, { data, memoryReference, offset = 0 }: DebugProtocol.WriteMemoryArguments) {
 		const variable = this._variableHandles.get(Number(memoryReference));
 		if (typeof variable === 'object') {
 			const decoded = base64.toByteArray(data);
@@ -440,26 +413,17 @@ export class MockDebugSession extends LoggingDebugSession {
 		}
 
 		this.sendResponse(response);
-	}
+	}*/
 
 	protected async variablesRequest(response: DebugProtocol.VariablesResponse, args: DebugProtocol.VariablesArguments, request?: DebugProtocol.Request): Promise<void> {
 
 		let vs: RuntimeVariable[] = [];
 
 		const v = this._variableHandles.get(args.variablesReference);
-		if (v === 'locals') {
-			vs = await this._runtime.fetchVariables();
-		} else if (v === 'globals') {
-			if (request) {
-				this._cancellationTokens.set(request.seq, false);
-				vs = await this._runtime.getGlobalVariables(() => !!this._cancellationTokens.get(request.seq));
-				this._cancellationTokens.delete(request.seq);
-			} else {
-				vs = await this._runtime.getGlobalVariables();
-			}
-		} else if (v && Array.isArray(v.value)) {
+		vs = await this._runtime.fetchVariables(v);
+		/*else if (v && Array.isArray(v.value)) { // FIXME: Fix once handles are working
 			vs = v.value;
-		}
+		}*/
 
 		response.body = {
 			variables: vs.map(v => this.convertFromRuntime(v))
@@ -467,7 +431,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
-	protected setVariableRequest(response: DebugProtocol.SetVariableResponse, args: DebugProtocol.SetVariableArguments): void {
+	/*protected setVariableRequest(response: DebugProtocol.SetVariableResponse, args: DebugProtocol.SetVariableArguments): void {
 		const container = this._variableHandles.get(args.variablesReference);
 		const rv = container === 'locals'
 			? this._runtime.getVariable(args.name)
@@ -485,7 +449,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		}
 
 		this.sendResponse(response);
-	}
+	}*/
 
 	protected continueRequest(response: DebugProtocol.ContinueResponse, args: DebugProtocol.ContinueArguments): void {
 		this._runtime.continue();
@@ -560,7 +524,7 @@ export class MockDebugSession extends LoggingDebugSession {
 	protected setExpressionRequest(response: DebugProtocol.SetExpressionResponse, args: DebugProtocol.SetExpressionArguments): void {
 
 		if (args.expression.startsWith('$')) {
-			const rv = this._runtime.getVariable(args.expression.substr(1));
+			const rv = this._runtime.getVariable(args.expression.substring(1));
 			if (rv) {
 				rv.value = this.convertToRuntime(args.value);
 				response.body = this.convertFromRuntime(rv);
@@ -771,22 +735,16 @@ export class MockDebugSession extends LoggingDebugSession {
 
 	//---- helpers
 
-	private convertToRuntime(value: string): IRuntimeVariableType {
+	private convertToRuntime(value: string): string {
 
 		value= value.trim();
 
-		if (value === 'true') {
-			return true;
-		}
-		if (value === 'false') {
-			return false;
-		}
 		if (value[0] === '\'' || value[0] === '"') {
-			return value.substr(1, value.length-2);
+			return value.substring(1, value.length-2);
 		}
 		const n = parseFloat(value);
 		if (!isNaN(n)) {
-			return n;
+			return n.toString();
 		}
 		return value;
 	}
@@ -795,48 +753,30 @@ export class MockDebugSession extends LoggingDebugSession {
 
 		let dapVariable: DebugProtocol.Variable = {
 			name: v.name,
-			value: '???',
-			type: typeof v.value,
+			value: v.value,
+			type: v.type,
 			variablesReference: 0,
 			evaluateName: v.name
 		};
 
 		if (Array.isArray(v.value)) {
-			dapVariable.value = 'Object';
-			v.reference ??= this._variableHandles.create(v);
+			dapVariable.value = 'array';
+			v.reference ??= this._variableHandles.create(v.name);
 			dapVariable.variablesReference = v.reference;
-		} else {
-
-			switch (typeof v.value) {
-				case 'number':
-					if (Math.round(v.value) === v.value) {
-						dapVariable.value = this.formatNumber(v.value);
-						(<any>dapVariable).__vscodeVariableMenuContext = 'simple';	// enable context menu contribution
-						dapVariable.type = 'integer';
-					} else {
-						dapVariable.value = v.value.toString();
-						dapVariable.type = 'float';
-					}
-					break;
-				case 'string':
-					if(v.value.search(/'h/) !== -1){
-						dapVariable.type = 'integer';
-					}
-					dapVariable.value = v.value;
-					break;
-				case 'boolean':
-					dapVariable.value = v.value ? 'true' : 'false';
-					break;
-				default:
-					dapVariable.value = typeof v.value;
-					break;
+		} 
+		else {
+			if(v.type.search(/int/) !== -1){
+				dapVariable.type = 'integer';
+			}
+			else if(v.type.search(/string/) !== -1){
+				dapVariable.type = 'string';
 			}
 		}
 		
-		if (v.memory) {
+		/*if (v.memory) {
 			v.reference ??= this._variableHandles.create(v);
 			dapVariable.memoryReference = String(v.reference);
-		}
+		}*/
 
 		return dapVariable;
 	}

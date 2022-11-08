@@ -45,38 +45,17 @@ interface RuntimeDisassembledInstruction {
 export type IRuntimeVariableType = number | boolean | string | RuntimeVariable[];
 
 export class RuntimeVariable {
-	private _memory?: Uint8Array;
-
 	public reference?: number;
 
 	public get value() {
 		return this._value;
 	}
 
-	public set value(value: IRuntimeVariableType) {
+	public set value(value: string){
 		this._value = value;
-		this._memory = undefined;
 	}
 
-	public get memory() {
-		if (this._memory === undefined && typeof this._value === 'string') {
-			this._memory = new TextEncoder().encode(this._value);
-		}
-		return this._memory;
-	}
-
-	constructor(public readonly name: string, private _value: IRuntimeVariableType) {}
-
-	public setMemory(data: Uint8Array, offset = 0) {
-		const memory = this.memory;
-		if (!memory) {
-			return;
-		}
-
-		memory.set(data, offset);
-		this._memory = memory;
-		this._value = new TextDecoder().decode(memory);
-	}
+	constructor(public readonly name: string, private _value: string, public readonly type: string) {}
 }
 
 interface Word {
@@ -128,7 +107,7 @@ export class MockRuntime extends EventEmitter {
 		return this._sourceFile;
 	}
 
-	private variables = new Map<string, RuntimeVariable>();
+	private variables = new Map<string, RuntimeVariable[]>();
 
 	private env: string = '';
 
@@ -142,6 +121,8 @@ export class MockRuntime extends EventEmitter {
 	private instructions: Word[] = [];
 	private starts: number[] = [];
 	private ends: number[] = [];
+
+	private scopes: string[] = [];
 
 	// This is the next line that will be 'executed'
 	private _currentLine = 0;
@@ -168,9 +149,6 @@ export class MockRuntime extends EventEmitter {
 	private breakpointId = 1;
 
 	private breakAddresses = new Map<string, string>();
-
-	private namedException: string | undefined;
-	private otherExceptions = false;
 
 	private queue = new EventEmitterQueue();
 
@@ -286,44 +264,6 @@ export class MockRuntime extends EventEmitter {
 	 */
 	public step(instruction: boolean, reverse: boolean) {
 
-		if (instruction) {
-			if (reverse) {
-				this.instruction--;
-			} else {
-				this.instruction++;
-			}
-			this.sendEvent('stopOnStep');
-		} else {
-			if (!this.executeLine(this.currentLine, reverse)) {
-				if (!this.updateCurrentLine(reverse)) {
-					this.findNextStatement(reverse, 'stopOnStep');
-				}
-			}
-		}
-	}
-
-	private updateCurrentLine(reverse: boolean): boolean {
-		if (reverse) {
-			if (this.currentLine > 0) {
-				this.currentLine--;
-			} else {
-				// no more lines: stop at first line
-				this.currentLine = 0;
-				this.currentColumn = undefined;
-				this.sendEvent('stopOnEntry');
-				return true;
-			}
-		} else {
-			if (this.currentLine < this.sourceLines.length-1) {
-				this.currentLine++;
-			} else {
-				// no more lines: run to end
-				this.currentColumn = undefined;
-				this.sendEvent('end');
-				return true;
-			}
-		}
-		return false;
 	}
 
 	/**
@@ -380,7 +320,7 @@ export class MockRuntime extends EventEmitter {
 	}
 
 	/**
-	 * Returns a fake 'stacktrace' where every 'stackframe' is a word from the current line.
+	 * Returns the stack trace
 	 */
 	public async stack(startFrame: number, endFrame: number): Promise<IRuntimeStack> {
 
@@ -409,7 +349,6 @@ export class MockRuntime extends EventEmitter {
 			}
 		}
 		const frames: IRuntimeStackFrame[] = [];
-		// every word of the current line becomes a stack frame.
 		for (let i = startFrame; i < Math.min(endFrame, names.length); i++) {
 
 			const stackFrame: IRuntimeStackFrame = {
@@ -423,11 +362,27 @@ export class MockRuntime extends EventEmitter {
 
 			frames.push(stackFrame);
 		}
+		// Extract scopes from the topmost stack frame
+		this.scopes = [];
+		if(names.length) {
+			let fullscope: string = names[0].substring(names[0].lastIndexOf(' ') + 1);
+			var regExp = /\./g;
+			do {
+				var m = regExp.exec(fullscope);
+				if(m){
+					this.scopes.push(fullscope.substring(0, m.index));
+				}
+			} while(m);
+		}
 
 		return {
 			frames: frames,
 			count: names.length
 		};
+	}
+
+	public getScopes(): string[]{
+		return this.scopes;
 	}
 
 	/*
@@ -506,11 +461,6 @@ export class MockRuntime extends EventEmitter {
 		this.breakAddresses.clear();
 	}
 
-	public setExceptionsFilters(namedException: string | undefined, otherExceptions: boolean): void {
-		this.namedException = namedException;
-		this.otherExceptions = otherExceptions;
-	}
-
 	public setInstructionBreakpoint(address: number): boolean {
 		this.instructionBreakpoints.add(address);
 		return true;
@@ -520,58 +470,56 @@ export class MockRuntime extends EventEmitter {
 		this.instructionBreakpoints.clear();
 	}
 
-	public async getGlobalVariables(cancellationToken?: () => boolean ): Promise<RuntimeVariable[]> {
+	public async fetchVariables(scope: string): Promise<RuntimeVariable[]> {
+		this.variables.delete(scope);
+		let vars = new Array<RuntimeVariable>();
+		this.variables.set(scope, vars);
 
-		let a: RuntimeVariable[] = [];
-
-		for (let i = 0; i < 10; i++) {
-			a.push(new RuntimeVariable(`global_${i}`, i));
-			if (cancellationToken && cancellationToken()) {
-				break;
+		await this.sendCommandWaitResponse("describe " + scope);
+		while(this.stdout_data.length > 0){
+			let line = this.stdout_data.shift();
+			if(line && line.search('=') !== -1){
+				let name_idx: number = line.search(/\s[a-z_][a-z0-9_]*(\s\[\$\])?\s=/i);
+				let type = line.substring(0, name_idx).trimLeft();
+				let name = line.substring(name_idx, line.search('=')).replace(/\s/g, '');
+				let value = line.substring(line.search('=') + 1).replace(/\s/g, '');
+				vars.push(new RuntimeVariable(name, value, type));
 			}
-			await timeout(1000);
 		}
-
-		return a;
-	}
-
-	public async fetchVariables(): Promise<RuntimeVariable[]> {
-		let assignments: string[] = [];
-		let strs: string[] = [];
-
-		this.variables.clear();
-		await this.sendCommandWaitResponse("value -verbose *");
-		let line = this.stdout_data.shift();
-		if(line){
-			assignments = line.split(' ');
-			assignments.forEach(it => {
-				strs = it.split('=');
-				this.variables.set(strs[0], new RuntimeVariable(strs[0], strs[1]));
-			});
-		}
-
-		return Array.from(this.variables, ([name, value]) => value);
+		return vars;
 	}
 
 	public async fetchVariable(name: string): Promise<RuntimeVariable | undefined> {
-		let assignments: string[] = [];
 		let strs: string[] = [];
+		let variable: RuntimeVariable | undefined = undefined;
 
+		// Try to find variable in any existing scopes already fetched
+		for(let [_, variables] of this.variables.entries()){
+			variables.forEach(v => {
+				if(v.name == name){
+					variable = v;
+				}
+			});
+		}
+		// Manually fetch value
 		await this.sendCommandWaitResponse("value -verbose " + name);
 		let line = this.stdout_data.shift();
 		if(line){
-			assignments = line.split(' ');
-			assignments.forEach(it => {
-				strs = it.split('=');
-				this.variables.set(name, new RuntimeVariable(name, strs[1]));
-			});
+			strs = line.split('=');
+			variable = new RuntimeVariable(name, strs[1], "unknown");
 		}
-
-		return this.variables.get(name);
+		return variable;
 	}
 
 	public getVariable(name: string): RuntimeVariable | undefined {
-		return this.variables.get(name);
+		for(let [_, variables] of this.variables.entries()){
+			variables.forEach(v => {
+				if(v.name == name){
+					return v;
+				}
+			});
+		}
+		return undefined;
 	}
 
 	/**
@@ -680,111 +628,6 @@ export class MockRuntime extends EventEmitter {
 			this.sendEvent(stepEvent);
 			return true;
 		}
-		return false;
-	}
-
-	/**
-	 * "execute a line" of the readme markdown.
-	 * Returns true if execution sent out a stopped event and needs to stop.
-	 */
-	private executeLine(ln: number, reverse: boolean): boolean {
-
-		// first "execute" the instructions associated with this line and potentially hit instruction breakpoints
-		while (reverse ? this.instruction >= this.starts[ln] : this.instruction < this.ends[ln]) {
-			reverse ? this.instruction-- : this.instruction++;
-			if (this.instructionBreakpoints.has(this.instruction)) {
-				this.sendEvent('stopOnInstructionBreakpoint');
-				return true;
-			}
-		}
-
-		const line = this.getLine(ln);
-
-		// find variable accesses
-		let reg0 = /\$([a-z][a-z0-9]*)(=(false|true|[0-9]+(\.[0-9]+)?|\".*\"|\{.*\}))?/ig;
-		let matches0: RegExpExecArray | null;
-		while (matches0 = reg0.exec(line)) {
-			if (matches0.length === 5) {
-
-				let access: string | undefined;
-
-				const name = matches0[1];
-				const value = matches0[3];
-
-				let v = new RuntimeVariable(name, value);
-
-				if (value && value.length > 0) {
-
-					if (value === 'true') {
-						v.value = true;
-					} else if (value === 'false') {
-						v.value = false;
-					} else if (value[0] === '"') {
-						v.value = value.slice(1, -1);
-					} else if (value[0] === '{') {
-						v.value = [
-							new RuntimeVariable('fBool', true),
-							new RuntimeVariable('fInteger', 123),
-							new RuntimeVariable('fString', 'hello'),
-							new RuntimeVariable('flazyInteger', 321)
-						];
-					} else {
-						v.value = parseFloat(value);
-					}
-
-					if (this.variables.has(name)) {
-						// the first write access to a variable is the "declaration" and not a "write access"
-						access = 'write';
-					}
-					this.variables.set(name, v);
-				} else {
-					if (this.variables.has(name)) {
-						// variable must exist in order to trigger a read access
-						access = 'read';
-					}
-				}
-
-				const accessType = this.breakAddresses.get(name);
-				if (access && accessType && accessType.indexOf(access) >= 0) {
-					this.sendEvent('stopOnDataBreakpoint', access);
-					return true;
-				}
-			}
-		}
-
-		// if 'log(...)' found in source -> send argument to debug console
-		const reg1 = /(log|prio|out|err)\(([^\)]*)\)/g;
-		let matches1: RegExpExecArray | null;
-		while (matches1 = reg1.exec(line)) {
-			if (matches1.length === 3) {
-				this.sendEvent('output', matches1[1], matches1[2], this._sourceFile, ln, matches1.index);
-			}
-		}
-
-		// if pattern 'exception(...)' found in source -> throw named exception
-		const matches2 = /exception\((.*)\)/.exec(line);
-		if (matches2 && matches2.length === 2) {
-			const exception = matches2[1].trim();
-			if (this.namedException === exception) {
-				this.sendEvent('stopOnException', exception);
-				return true;
-			} else {
-				if (this.otherExceptions) {
-					this.sendEvent('stopOnException', undefined);
-					return true;
-				}
-			}
-		} else {
-			// if word 'exception' found in source -> throw exception
-			if (line.indexOf('exception') >= 0) {
-				if (this.otherExceptions) {
-					this.sendEvent('stopOnException', undefined);
-					return true;
-				}
-			}
-		}
-
-		// nothing interesting found -> continue
 		return false;
 	}
 
