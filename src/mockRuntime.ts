@@ -470,29 +470,91 @@ export class MockRuntime extends EventEmitter {
 		this.instructionBreakpoints.clear();
 	}
 
-	public async fetchVariables(scope: string): Promise<RuntimeVariable[]> {
-		this.variables.delete(scope);
+	private async parseSimulatorVariablesResponse(scope: string, mode: string) : Promise<RuntimeVariable[]> {
 		let vars = new Array<RuntimeVariable>();
-		this.variables.set(scope, vars);
+		let lines: string[] = [];
+		let line: string | undefined = '';
+		let type: string = '';
+		let name: string = '';
+		let value: string = '';
+		let size: number = 1;
+		let m;
 
-		// TODO: Parse correctly for queues and types describe requests
-		await this.sendCommandWaitResponse("describe " + scope);
-		while(this.stdout_data.length > 0){
-			let line = this.stdout_data.shift();
-			if(line && line.search('=') !== -1){
-				let name_idx: number = line.search(/\s[a-z_][a-z0-9_]*(\s\[\$\])?\s=/i);
-				let type = line.substring(0, name_idx).trimLeft();
-				let name = line.substring(name_idx, line.search('=')).replace(/\s/g, '');
-				let value = line.substring(line.search('=') + 1).replace(/\s/g, '');
-				let size = 1;
+		switch(mode){
+			case 'scope':
+				lines = await this.sendCommandWaitResponse("describe " + scope);
+				while(lines.length > 0){
+					line = lines.shift();
+					if(line && line.search('=') !== -1){
+						let name_idx: number = line.search(/\s[a-z_][a-z0-9_]*(\s\[\$\])?\s=/i);
+						type = line.substring(0, name_idx).trimLeft();
+						name = line.substring(name_idx, line.search('=')).replace(/\s/g, '');
+						value = line.substring(line.search('=') + 1).replace(/\s/g, '');
+						size = 1;
 
-				if(name.search(/\[\$\]/) !== -1){
-					size = parseInt(value);
-					value = "(" + size + ") " + type;
-					type += '[$]';
+						if(name.search(/\[\$\]/) !== -1){
+							size = parseInt(value);
+							value = "(" + size + ") " + type;
+							type += ' queue';
+							name = name.replace(/\[\$\]/, '');
+						}
+						vars.push(new RuntimeVariable(name, value, type, size));
+					}
 				}
-				vars.push(new RuntimeVariable(name, value, type, size));
-			}
+				break;
+			case 'array':
+				// 1) Request for variable without brackets which returns array size and type
+				lines = await this.sendCommandWaitResponse("describe " + scope);
+				line = lines.shift();
+				if(line){
+					size = parseInt(line.substring(line.search('=') + 1).replace(/\s/g, ''));
+					// 2) Parse type after variable keyword
+					if((m = /variable\s[a-z_][a-z0-9_]*\s/.exec(line)) !== null){
+						type = m[0].substring(9, m[0].length - 1);
+					}
+					else {
+						type = "unknown";
+					}
+				}
+				// 3) Request type
+				if(type !== "unknown"){
+					lines = await this.sendCommandWaitResponse("describe " + type);
+					// 4) If its a struct (or a class eventually), xrunDebug.ts must properly page the children
+					line = lines.shift();
+					if(line && line.search(/struct/) !== -1){
+						type += " struct";
+					}
+					for(let i = 0; i < size; i++){
+						lines = await this.sendCommandWaitResponse("describe " + scope + "[" + i + "]");
+						line = lines.shift();
+						if(line){
+							name = scope + "[" + i + "]";
+							if(type.search(/struct/) === -1){
+								if((m = /variable\s[a-z_][a-z0-9_]*\s/.exec(line)) !== null){
+									type = m[0].substring(9, m[0].length - 1);
+								}
+								value = line.substring(line.search('=') + 1);
+							}
+							vars.push(new RuntimeVariable(name, value, type, 1));
+						}
+					}
+				}
+				break;
+		}
+		return vars;
+	}
+
+	public async fetchVariables(scope: string): Promise<RuntimeVariable[]> {
+		let vars: RuntimeVariable[] = [];
+		this.variables.delete(scope);
+		// TODO: Parse correctly for queues and types describe requests
+		
+		if(this.scopes.includes(scope)){
+			vars = await this.parseSimulatorVariablesResponse(scope, 'scope');
+			this.variables.set(scope, vars);
+		}
+		else {
+			vars = await this.parseSimulatorVariablesResponse(scope, 'array');
 		}
 		return vars;
 	}
@@ -688,9 +750,10 @@ export class MockRuntime extends EventEmitter {
 		console.log("Terminal command sent: " + cmd);
 	}
 
-	private async sendCommandWaitResponse(cmd: string, timeout:number = 1000): Promise<void>{
+	private async sendCommandWaitResponse(cmd: string, timeout:number = 1000): Promise<string[]>{
 		this.stdout_data = [];
 		this.sendSimulatorTerminalCommand(cmd);
 		await this.pending_data.wait(timeout);
+		return this.stdout_data;
 	}
 }
