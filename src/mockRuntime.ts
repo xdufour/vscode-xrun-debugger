@@ -55,7 +55,7 @@ export class RuntimeVariable {
 		this._value = value;
 	}
 
-	constructor(public readonly name: string, private _value: string, public readonly type: string) {}
+	constructor(public readonly name: string, private _value: string, public readonly type: string, public size?: number) {}
 }
 
 interface Word {
@@ -475,6 +475,7 @@ export class MockRuntime extends EventEmitter {
 		let vars = new Array<RuntimeVariable>();
 		this.variables.set(scope, vars);
 
+		// TODO: Parse correctly for queues and types describe requests
 		await this.sendCommandWaitResponse("describe " + scope);
 		while(this.stdout_data.length > 0){
 			let line = this.stdout_data.shift();
@@ -483,7 +484,14 @@ export class MockRuntime extends EventEmitter {
 				let type = line.substring(0, name_idx).trimLeft();
 				let name = line.substring(name_idx, line.search('=')).replace(/\s/g, '');
 				let value = line.substring(line.search('=') + 1).replace(/\s/g, '');
-				vars.push(new RuntimeVariable(name, value, type));
+				let size = 1;
+
+				if(name.search(/\[\$\]/) !== -1){
+					size = parseInt(value);
+					value = "(" + size + ") " + type;
+					type += '[$]';
+				}
+				vars.push(new RuntimeVariable(name, value, type, size));
 			}
 		}
 		return vars;

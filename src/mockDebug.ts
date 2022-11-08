@@ -421,9 +421,6 @@ export class MockDebugSession extends LoggingDebugSession {
 
 		const v = this._variableHandles.get(args.variablesReference);
 		vs = await this._runtime.fetchVariables(v);
-		/*else if (v && Array.isArray(v.value)) { // FIXME: Fix once handles are working
-			vs = v.value;
-		}*/
 
 		response.body = {
 			variables: vs.map(v => this.convertFromRuntime(v))
@@ -759,8 +756,7 @@ export class MockDebugSession extends LoggingDebugSession {
 			evaluateName: v.name
 		};
 
-		if (Array.isArray(v.value)) {
-			dapVariable.value = 'array';
+		if (v.type.search(/\[\$\]/) !== -1) {
 			v.reference ??= this._variableHandles.create(v.name);
 			dapVariable.variablesReference = v.reference;
 		} 
