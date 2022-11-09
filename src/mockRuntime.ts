@@ -470,7 +470,11 @@ export class MockRuntime extends EventEmitter {
 		this.instructionBreakpoints.clear();
 	}
 
-	private async parseSimulatorVariablesResponse(scope: string, mode: string) : Promise<RuntimeVariable[]> {
+	private async parseSimulatorVariablesResponse(scope: string, mode: 'scope' | 'structuredVariable') : Promise<RuntimeVariable[]> {
+		let sv_types: string[] = ['bit', 'byte', 'shortint', 'int', 'longint', 'reg', 'logic', 'integer', 
+								'time', 'shortreal', 'real', 'realtime', 'string', 'enum', 'process'];
+		let sv_partial_types: string[] = ['enum', 'reg', 'logic'];
+		let sv_attributes: string[] = ['static', 'const', 'local', 'protected', 'rand', 'unsigned', 'signed'];
 		let vars = new Array<RuntimeVariable>();
 		let lines: string[] = [];
 		let line: string | undefined = '';
@@ -486,28 +490,46 @@ export class MockRuntime extends EventEmitter {
 				while(lines.length > 0){
 					line = lines.shift();
 					if(line && line.search('=') !== -1){
-						let name_idx: number = line.search(/\s[a-z_][a-z0-9_]*(\s\[\$\])?\s=/i);
-						type = line.substring(0, name_idx).trimLeft();
+						let name_idx: number = line.search(/\s[a-z_][a-z0-9_]*(\s\[.*\])?\s=/i);
+						type = line.substring(0, name_idx).replace(new RegExp(`(${sv_attributes.join('|')})` , 'g'), '').trimLeft();
 						name = line.substring(name_idx, line.search('=')).replace(/\s/g, '');
-						value = line.substring(line.search('=') + 1).replace(/\s/g, '');
+						value = line.substring(line.search('=') + 1).replace(/\s?\(.*\)/, ''); 
 						size = 1;
+						// TODO: Maybe add something for the derived class inheritance indicated at the end of the string
 
-						if(name.search(/\[\$\]/) !== -1){
+						if(!sv_types.includes(type) && !(new RegExp(`^(${sv_partial_types.join('|')})\\s`, 'g').test(type))){
+							let lines_t = await this.sendCommandWaitResponse("describe " + type);
+							let line_t = lines_t.shift();
+							if(line_t){
+								if(line_t.search(/typedef\s/) !== -1){
+									type += ` (${line_t.substring(line_t.search(/typedef\s/) + 8).replace(/\s?{.*$/, '')})`;
+								}
+							}
+						}
+
+						if(name.search(/\[\$\]/) !== -1 || type.search(/\squeue/) !== -1){
 							size = parseInt(value);
 							value = "(" + size + ") " + type;
-							type += ' queue';
+							if(type.search(/\squeue/) === -1)
+								type += ' queue';
 							name = name.replace(/\[\$\]/, '');
 						}
 						vars.push(new RuntimeVariable(name, value, type, size));
 					}
 				}
 				break;
-			case 'array':
-				// 1) Request for variable without brackets which returns array size and type
+			case 'structuredVariable':
+				// 1) Request for variable which returns array size and type
 				lines = await this.sendCommandWaitResponse("describe " + scope);
 				line = lines.shift();
 				if(line){
-					size = parseInt(line.substring(line.search('=') + 1).replace(/\s/g, ''));
+					let _size: number = parseInt(line.substring(line.search('=') + 1).replace(/\s/g, ''));
+					if(_size !== NaN){
+						size = _size;
+					}
+					else{
+						size = 0;
+					}
 					// 2) Parse type after variable keyword
 					if((m = /variable\s[a-z_][a-z0-9_]*\s/.exec(line)) !== null){
 						type = m[0].substring(9, m[0].length - 1);
@@ -524,18 +546,43 @@ export class MockRuntime extends EventEmitter {
 					if(line && line.search(/struct/) !== -1){
 						type += " struct";
 					}
-					for(let i = 0; i < size; i++){
-						lines = await this.sendCommandWaitResponse("describe " + scope + "[" + i + "]");
-						line = lines.shift();
-						if(line){
-							name = scope + "[" + i + "]";
-							if(type.search(/struct/) === -1){
-								if((m = /variable\s[a-z_][a-z0-9_]*\s/.exec(line)) !== null){
-									type = m[0].substring(9, m[0].length - 1);
+					if(size > 0){
+						// Fetch each index of the array
+						for(let i = 0; i < size; i++){
+							lines = await this.sendCommandWaitResponse("describe " + scope + "[" + i + "]");
+							line = lines.shift();
+							if(line){
+								name = scope + "[" + i + "]";
+								if(type.search(/struct/) === -1){
+									if((m = /variable\s[a-z_][a-z0-9_]*\s/.exec(line)) !== null){
+										type = m[0].substring(9, m[0].length - 1);
+									}
+									value = line.substring(line.search('=') + 1);
 								}
-								value = line.substring(line.search('=') + 1);
+								vars.push(new RuntimeVariable(name, value, type, 0));
 							}
-							vars.push(new RuntimeVariable(name, value, type, 1));
+						}
+					}
+					else {
+						let names: string[] = [];
+						let types: string[] = [];
+						// Get all names and types from the type describe command
+						while(lines.length > 0){
+							line = lines.shift();
+							if(line && line.search(/}/) === -1){
+								let end_of_type_idx = line.search(/\s[a-z_][a-z0-9_]*$/);
+								types.push(line.substring(0, end_of_type_idx));
+								names.push(line.substring(end_of_type_idx + 1));
+							}
+						}
+						// Fetch values
+						for(let i = 0; i < names.length; i++) {
+							lines = await this.sendCommandWaitResponse("describe " + scope + "." + names[i]);
+							line = lines.shift();
+							if(line){
+								value = line.substring(line.search('=') + 1);
+								vars.push(new RuntimeVariable(names[i], value, types[i], 0));
+							}
 						}
 					}
 				}
@@ -544,17 +591,16 @@ export class MockRuntime extends EventEmitter {
 		return vars;
 	}
 
-	public async fetchVariables(scope: string): Promise<RuntimeVariable[]> {
+	public async fetchVariables(refName: string): Promise<RuntimeVariable[]> {
 		let vars: RuntimeVariable[] = [];
-		this.variables.delete(scope);
-		// TODO: Parse correctly for queues and types describe requests
+		this.variables.delete(refName);
 		
-		if(this.scopes.includes(scope)){
-			vars = await this.parseSimulatorVariablesResponse(scope, 'scope');
-			this.variables.set(scope, vars);
+		if(this.scopes.includes(refName)){
+			vars = await this.parseSimulatorVariablesResponse(refName, 'scope');
+			this.variables.set(refName, vars);
 		}
 		else {
-			vars = await this.parseSimulatorVariablesResponse(scope, 'array');
+			vars = await this.parseSimulatorVariablesResponse(refName, 'structuredVariable');
 		}
 		return vars;
 	}

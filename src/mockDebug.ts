@@ -756,15 +756,15 @@ export class MockDebugSession extends LoggingDebugSession {
 			evaluateName: v.name
 		};
 
-		if (v.type.search(/queue/) !== -1 || v.type.search(/struct/) !== -1) {
+		if (v.type.search(/\squeue/) !== -1 || v.type.search(/\sstruct/) !== -1) {
 			v.reference ??= this._variableHandles.create(v.name);
 			dapVariable.variablesReference = v.reference;
 		}
 		else {
-			if(v.type.search(/int/) !== -1){
+			if(v.type.search(/^int/) !== -1){
 				dapVariable.type = 'integer';
 			}
-			else if(v.type.search(/string/) !== -1){
+			else if(v.type.search(/^string/) !== -1){
 				dapVariable.type = 'string';
 			}
 		}
