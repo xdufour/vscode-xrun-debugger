@@ -106,7 +106,7 @@ export function activateMockDebug(context: vscode.ExtensionContext, factory?: vs
 				do {
 					var m = regExp.exec(line.text);
 					if (m) {
-						const varName = m[1];
+						const varName = m[0];
 						const varRange = new vscode.Range(l, m.index, l, m.index + varName.length);
 						// some literal text
 						//allValues.push(new vscode.InlineValueText(varRange, `${varName}: ${viewport.start.line}`));

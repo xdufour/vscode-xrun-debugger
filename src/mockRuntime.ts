@@ -4,6 +4,7 @@
 
 import { EventEmitter } from 'events';
 import { Subject } from 'await-notify';
+import fs = require('fs');
 
 export interface FileAccessor {
 	isWindows: boolean;
@@ -110,6 +111,7 @@ export class MockRuntime extends EventEmitter {
 	private variables = new Map<string, RuntimeVariable[]>();
 
 	private env: string = '';
+	private stopOnEntry: boolean = true;
 
 	private stdout_data: string[] = [];
 
@@ -133,7 +135,7 @@ export class MockRuntime extends EventEmitter {
 		this._currentLine = x;
 		this.instruction = this.starts[x];
 	}
-	private currentColumn: number | undefined;
+	private stepping: boolean = false;
 
 	// This is the next instruction that will be 'executed'
 	public instruction= 0;
@@ -207,16 +209,15 @@ export class MockRuntime extends EventEmitter {
 			this.sendEvent('end');
 		}
 		else if(line.search('Created stop 1:') !== -1){
+			// TODO: Change to be generic to non-UVM testbenches (and/or that don't include END-OF-BUILD stop)
 			console.log("DETECTED INITIAL STOP");
 			this.sendSimulatorTerminalCommand("run");
-			this.sendEvent('stopOnBreakpoint');
 		}
 		else if(line.search(/\(stop\s\d+:/) !== -1){
 			let bp_line_idx: number = line.search(/:\d+\)/);
 			let bp_line_str: string = line.substring(bp_line_idx + 1, line.length - 1);
 			let bp_file_str: string = line.substring(line.search(/\(stop\s\d+:/) + 11, bp_line_idx);
 			console.log("BREAKPOINT HIT");
-			console.log("line: " + bp_line_str);
 			for (const path of this.breakPoints.keys()){
 				if(path.search(bp_file_str) !== -1){
 					this._sourceFile = path;
@@ -225,7 +226,29 @@ export class MockRuntime extends EventEmitter {
 			this.currentLine = parseInt(bp_line_str) - 1;
 			this.sendEvent('stopOnBreakpoint');
 		}
+		else if(this.stepping && line.search(/:\d+\s/) !== -1){
+			let step_line_idx: number = line.search(/:\d+\s/);
+			var m = /:\d+\s/.exec(line);
+			let step_line_str: string = '';
+			if(m){
+				step_line_str = m[0].substring(1, m[0].length - 1);
+			}
+			let step_file_str: string = this.env + '/' + line.substring(9, step_line_idx);
+			this.stepping = false;
+			console.log("STOP ON STEP");
+			if(fs.existsSync(step_file_str)){
+				this._sourceFile = step_file_str;
+			}
+			this.currentLine = parseInt(step_line_str) - 1;
+			this.sendEvent('stopOnStep');
+		}
 		else if(line.search(/End-of-build$/) !== -1){
+			if(this.stopOnEntry){
+				this.sendEvent('stopOnBreakpoint');
+			}
+			else{
+				this.sendSimulatorTerminalCommand("run");
+			}
 			this.launch_done.notify();
 		}
 	}
@@ -236,9 +259,12 @@ export class MockRuntime extends EventEmitter {
 	 */
 	public async start(env:string, program: string, args: string, stopOnEntry: boolean, debug: boolean): Promise<void> {
 		this.env = env;
+		this.stopOnEntry = stopOnEntry;
 		
 		this.sendSimulatorTerminalCommand("cd " + this.env);
 
+		// TODO: Make a setting for allowing generic arguments to specify interactive run config (linedebug etc. <-> -i)
+		// This encompasses other genericities most likely
 		if(debug) 
 			this.sendSimulatorTerminalCommand("./" + program + " " + args + " -i");
 		else
@@ -247,6 +273,9 @@ export class MockRuntime extends EventEmitter {
 		await this.launch_done.wait(5000);
 	}
 
+	/**
+	 * Terminate Xcelium execution and release license
+	 */
 	public terminate(){
 		this.sendSimulatorTerminalCommand("exit");
 	}
@@ -260,42 +289,27 @@ export class MockRuntime extends EventEmitter {
 	}
 
 	/**
-	 * Step to the next/previous non empty line.
+	 * "Step": Run one behavioral statement, stepping over subprogram calls
 	 */
-	public step(instruction: boolean, reverse: boolean) {
-
+	public step() {
+		this.stepping = true;
+		this.sendSimulatorTerminalCommand("run -next");
 	}
 
 	/**
-	 * "Step into" for Mock debug means: go to next character
+	 * "Step into": Run one behavioral statement, stepping into subprogram calls
 	 */
 	public stepIn(targetId: number | undefined) {
-		if (typeof targetId === 'number') {
-			this.currentColumn = targetId;
-			this.sendEvent('stopOnStep');
-		} else {
-			if (typeof this.currentColumn === 'number') {
-				if (this.currentColumn <= this.sourceLines[this.currentLine].length) {
-					this.currentColumn += 1;
-				}
-			} else {
-				this.currentColumn = 1;
-			}
-			this.sendEvent('stopOnStep');
-		}
+		this.stepping = true;
+		this.sendSimulatorTerminalCommand("run -step");
 	}
 
 	/**
-	 * "Step out" for Mock debug means: go to previous character
+	 * "Step out": Run until the current subprogram ends
 	 */
 	public stepOut() {
-		if (typeof this.currentColumn === 'number') {
-			this.currentColumn -= 1;
-			if (this.currentColumn === 0) {
-				this.currentColumn = undefined;
-			}
-		}
-		this.sendEvent('stopOnStep');
+		this.stepping = true;
+		this.sendSimulatorTerminalCommand("run -return");
 	}
 
 	public getStepInTargets(frameId: number): IRuntimeStepInTargets[] {
