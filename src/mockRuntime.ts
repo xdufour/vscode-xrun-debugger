@@ -226,20 +226,20 @@ export class MockRuntime extends EventEmitter {
 			this.currentLine = parseInt(bp_line_str) - 1;
 			this.sendEvent('stopOnBreakpoint');
 		}
-		else if(this.stepping && line.search(/:\d+\s/) !== -1){
+		else if(this.stepping && line.search(/xcelium>\s\S+\.(sv|v|vams|vh|svh):\d+\s/) !== -1){ // Make xcelium>\s optional for data breakpoints
 			let step_line_idx: number = line.search(/:\d+\s/);
 			var m = /:\d+\s/.exec(line);
 			let step_line_str: string = '';
 			if(m){
 				step_line_str = m[0].substring(1, m[0].length - 1);
 			}
-			let step_file_str: string = this.env + '/' + line.substring(9, step_line_idx);
-			this.stepping = false;
-			console.log("STOP ON STEP");
+			let step_file_str: string = this.env + '/' + line.substring(line.substring(0, step_line_idx).search(/\S*$/));
 			if(fs.existsSync(step_file_str)){
 				this._sourceFile = step_file_str;
 			}
 			this.currentLine = parseInt(step_line_str) - 1;
+			this.stepping = false;
+			console.log("STOP ON STEP");
 			this.sendEvent('stopOnStep');
 		}
 		else if(line.search(/End-of-build$/) !== -1){
@@ -456,19 +456,11 @@ export class MockRuntime extends EventEmitter {
 		this.breakPoints.delete(path);
 	}
 
-	public setDataBreakpoint(address: string, accessType: 'read' | 'write' | 'readWrite'): boolean {
+	public setDataBreakpoint(dataName: string): boolean {
+		// TODO: Find a way to parse data breakpoints being hit without getting false positives
+		//this.sendSimulatorTerminalCommand("stop -create -object " + dataName + " -name " + dataName);
 
-		const x = accessType === 'readWrite' ? 'read write' : accessType;
-
-		const t = this.breakAddresses.get(address);
-		if (t) {
-			if (t !== x) {
-				this.breakAddresses.set(address, 'read write');
-			}
-		} else {
-			this.breakAddresses.set(address, x);
-		}
-		return true;
+		return false;
 	}
 
 	public clearAllDataBreakpoints(): void {

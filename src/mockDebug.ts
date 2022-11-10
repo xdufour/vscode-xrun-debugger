@@ -579,20 +579,13 @@ export class MockDebugSession extends LoggingDebugSession {
             canPersist: false
         };
 
-		if (args.variablesReference && args.name) {
+		if (args.variablesReference) {
 			const v = this._variableHandles.get(args.variablesReference);
-			if (v === 'globals') {
-				response.body.dataId = args.name;
-				response.body.description = args.name;
-				response.body.accessTypes = [ "write" ];
-				response.body.canPersist = true;
-			} else {
-				response.body.dataId = args.name;
-				response.body.description = args.name;
-				response.body.accessTypes = ["read", "write", "readWrite"];
-				response.body.canPersist = true;
-			}
 		}
+		response.body.dataId = args.name;
+		response.body.description = args.name;
+		response.body.accessTypes = [ "write" ]; // read, readWrite
+		response.body.canPersist = false;
 
 		this.sendResponse(response);
 	}
@@ -607,7 +600,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		};
 
 		for (const dbp of args.breakpoints) {
-			const ok = this._runtime.setDataBreakpoint(dbp.dataId, dbp.accessType || 'write');
+			const ok = this._runtime.setDataBreakpoint(dbp.dataId);
 			response.body.breakpoints.push({
 				verified: ok
 			});
