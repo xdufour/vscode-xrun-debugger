@@ -284,6 +284,7 @@ export class MockRuntime extends EventEmitter {
 	 * "Step": Run one behavioral statement, stepping over subprogram calls
 	 */
 	public step() {
+		// TODO: Fix for use in Verilog code
 		this.stepping = true;
 		this.sendSimulatorTerminalCommand("run -next");
 	}
@@ -403,22 +404,24 @@ export class MockRuntime extends EventEmitter {
 	/*
 	 * Set breakpoint in file with given line.
 	 */
-	public async setBreakPoint(path: string, line: number): Promise<IRuntimeBreakpoint> {		
-		const bp: IRuntimeBreakpoint = { verified: false, line, id: this.breakpointId++ };
+	public async setBreakPoint(path: string, line: number): Promise<IRuntimeBreakpoint | undefined> {		
+		const bp: IRuntimeBreakpoint = { verified: true, line, id: this.breakpointId++ };
 		let bps = this.breakPoints.get(path);
 
 		// xrun format
 		// stop -create -file <filepath> -line <line# (not zero aligned)>
-		this.sendSimulatorTerminalCommand("stop -create -file " + path + " -line " + line + " -all -name " + bp.id);
-		if (!bps) {
-			bps = new Array<IRuntimeBreakpoint>();
-			this.breakPoints.set(path, bps);
+		let lines = await this.sendCommandWaitResponse("stop -create -file " + path + " -line " + line + " -all -name " + bp.id);
+		if(lines.length > 0){
+			if(lines[0].search(/Created stop/) !== -1){
+				if (!bps) {
+					bps = new Array<IRuntimeBreakpoint>();
+					this.breakPoints.set(path, bps);
+				}
+				bps.push(bp);
+				return bp;
+			}
 		}
-		bps.push(bp);
-
-		await this.verifyBreakpoints(path);
-
-		return bp;
+		return undefined;
 	}
 
 	/*
@@ -448,12 +451,17 @@ export class MockRuntime extends EventEmitter {
 		this.breakPoints.delete(path);
 	}
 
-	public setDataBreakpoint(varName: string): boolean {
+	public async setDataBreakpoint(varName: string): Promise<boolean> {
 		// TODO: Check response for errors
 		this.dataBreakpoints.push(varName);
-		this.sendSimulatorTerminalCommand("stop -create -object " + varName + " -name " + varName);
+		let lines = await this.sendCommandWaitResponse("stop -create -object " + varName + " -name " + varName);
+		let error = false;
+		lines.forEach((l: string) => {
+			if(l.search(/\*E,STCRDP/) !== -1)
+				error = true;
+		});
 
-		return true;
+		return !error;
 	}
 
 	public clearAllDataBreakpoints(): void {
@@ -685,68 +693,7 @@ export class MockRuntime extends EventEmitter {
 	private async loadSource(file: string): Promise<void> {
 		if (this._sourceFile !== file) {
 			this._sourceFile = this.normalizePathAndCasing(file);
-			this.initializeContents(await this.fileAccessor.readFile(file));
 		}
-	}
-
-	private initializeContents(memory: Uint8Array) {
-		this.sourceLines = new TextDecoder().decode(memory).split(/\r?\n/);
-
-		this.instructions = [];
-
-		this.starts = [];
-		this.instructions = [];
-		this.ends = [];
-
-		for (let l = 0; l < this.sourceLines.length; l++) {
-			this.starts.push(this.instructions.length);
-			const words = this.getWords(l, this.sourceLines[l]);
-			for (let word of words) {
-				this.instructions.push(word);
-			}
-			this.ends.push(this.instructions.length);
-		}
-	}
-
-	/**
-	 * return true on stop
-	 */
-	 private findNextStatement(reverse: boolean, stepEvent?: string): boolean {
-
-		for (let ln = this.currentLine; reverse ? ln >= 0 : ln < this.sourceLines.length; reverse ? ln-- : ln++) {
-
-			// is there a source breakpoint?
-			const breakpoints = this.breakPoints.get(this._sourceFile);
-			if (breakpoints) {
-				const bps = breakpoints.filter(bp => bp.line === ln);
-				if (bps.length > 0) {
-
-					// send 'stopped' event
-					this.sendEvent('stopOnBreakpoint');
-
-					// the following shows the use of 'breakpoint' events to update properties of a breakpoint in the UI
-					// if breakpoint is not yet verified, verify it now and send a 'breakpoint' update event
-					if (!bps[0].verified) {
-						bps[0].verified = true;
-						this.sendEvent('breakpointValidated', bps[0]);
-					}
-
-					this.currentLine = ln;
-					return true;
-				}
-			}
-
-			const line = this.getLine(ln);
-			if (line.length > 0) {
-				this.currentLine = ln;
-				break;
-			}
-		}
-		if (stepEvent) {
-			this.sendEvent(stepEvent);
-			return true;
-		}
-		return false;
 	}
 
 	private async verifyBreakpoints(path: string): Promise<void> {

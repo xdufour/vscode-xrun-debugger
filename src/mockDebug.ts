@@ -272,16 +272,19 @@ export class MockDebugSession extends LoggingDebugSession {
 
 		// set and verify breakpoint locations
 		const actualBreakpoints0 = clientLines.map(async l => {
-			const { verified, line, id } = await this._runtime.setBreakPoint(path, l);
-			const bp = new Breakpoint(verified, this.convertDebuggerLineToClient(line)) as DebugProtocol.Breakpoint;
-			bp.id = id;
-			return bp;
+			const runtime_bp = await this._runtime.setBreakPoint(path, l);
+			if(runtime_bp){
+				const bp = new Breakpoint(runtime_bp.verified, this.convertDebuggerLineToClient(runtime_bp.line)) as DebugProtocol.Breakpoint;
+				bp.id = runtime_bp.id;
+				return bp;
+			}
+			return undefined;
 		});
-		const actualBreakpoints = await Promise.all<DebugProtocol.Breakpoint>(actualBreakpoints0);
+		const actualBreakpoints = await Promise.all<DebugProtocol.Breakpoint | undefined>(actualBreakpoints0);
 
 		// send back the actual breakpoint positions
 		response.body = {
-			breakpoints: actualBreakpoints
+			breakpoints: actualBreakpoints.filter((bp) => bp) as DebugProtocol.Breakpoint[]
 		};
 		this.sendResponse(response);
 	}
@@ -590,7 +593,7 @@ export class MockDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
-	protected setDataBreakpointsRequest(response: DebugProtocol.SetDataBreakpointsResponse, args: DebugProtocol.SetDataBreakpointsArguments): void {
+	protected async setDataBreakpointsRequest(response: DebugProtocol.SetDataBreakpointsResponse, args: DebugProtocol.SetDataBreakpointsArguments): Promise<void> {
 
 		// clear all data breakpoints
 		this._runtime.clearAllDataBreakpoints();
@@ -600,10 +603,13 @@ export class MockDebugSession extends LoggingDebugSession {
 		};
 
 		for (const dbp of args.breakpoints) {
-			const ok = this._runtime.setDataBreakpoint(dbp.dataId);
-			response.body.breakpoints.push({
-				verified: ok
-			});
+			const ok = await this._runtime.setDataBreakpoint(dbp.dataId);
+			if(ok){
+				response.body.breakpoints.push({
+					verified: true
+				});
+			}
+			
 		}
 
 		this.sendResponse(response);
