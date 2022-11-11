@@ -2,19 +2,19 @@
  * Copyright (C) Microsoft Corporation. All rights reserved.
  *--------------------------------------------------------*/
 /*
- * activateMockDebug.ts containes the shared extension code that can be executed both in node.js and the browser.
+ * activateXrunDebug.ts containes the shared extension code that can be executed both in node.js and the browser.
  */
 
 'use strict';
 
 import * as vscode from 'vscode';
 import { WorkspaceFolder, DebugConfiguration, ProviderResult, CancellationToken } from 'vscode';
-import { MockDebugSession } from './mockDebug';
-import { FileAccessor } from './mockRuntime';
+import { XrunDebugSession } from './xrunDebug';
+import { FileAccessor } from './xrunRuntime';
 import * as fs from 'fs';
 import { parse } from 'yaml';
 
-export function activateMockDebug(context: vscode.ExtensionContext, factory?: vscode.DebugAdapterDescriptorFactory) {
+export function activateXrunDebug(context: vscode.ExtensionContext, factory?: vscode.DebugAdapterDescriptorFactory) {
 	context.subscriptions.push(vscode.commands.registerCommand('extension.xrun-debug.getRunSimArgs', config => {
 		return vscode.window.showInputBox({
 			placeHolder: "Please enter all config options for run_sim.sh",
@@ -22,35 +22,9 @@ export function activateMockDebug(context: vscode.ExtensionContext, factory?: vs
 		});
 	}));
 
-	// register a configuration provider for 'mock' debug type
-	const provider = new MockConfigurationProvider();
+	// register a configuration provider for 'xrun' debug type
+	const provider = new XrunConfigurationProvider();
 	context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider('xrun', provider));
-
-	// register a dynamic configuration provider for 'mock' debug type
-	/*context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider('xrun', {
-		provideDebugConfigurations(folder: WorkspaceFolder | undefined): ProviderResult<DebugConfiguration[]> {
-			return [
-				{
-					name: "Dynamic Launch",
-					request: "launch",
-					type: "xrun",
-					program: "${file}"
-				},
-				{
-					name: "Another Dynamic Launch",
-					request: "launch",
-					type: "xrun",
-					program: "${file}"
-				},
-				{
-					name: "Xrun Launch",
-					request: "launch",
-					type: "xrun",
-					program: "${file}"
-				}
-			];
-		}
-	}, vscode.DebugConfigurationProviderTriggerKind.Dynamic));*/
 
 	if (!factory) {
 		factory = new InlineDebugAdapterFactory();
@@ -125,7 +99,7 @@ export function activateMockDebug(context: vscode.ExtensionContext, factory?: vs
 	}));
 }
 
-class MockConfigurationProvider implements vscode.DebugConfigurationProvider {
+class XrunConfigurationProvider implements vscode.DebugConfigurationProvider {
 
 	/**
 	 * Massage a debug configuration just before a debug session is being launched,
@@ -184,6 +158,6 @@ function pathToUri(path: string) {
 class InlineDebugAdapterFactory implements vscode.DebugAdapterDescriptorFactory {
 
 	createDebugAdapterDescriptor(_session: vscode.DebugSession): ProviderResult<vscode.DebugAdapterDescriptor> {
-		return new vscode.DebugAdapterInlineImplementation(new MockDebugSession(workspaceFileAccessor));
+		return new vscode.DebugAdapterInlineImplementation(new XrunDebugSession(workspaceFileAccessor));
 	}
 }

@@ -1,12 +1,8 @@
-/*---------------------------------------------------------
- * Copyright (C) Microsoft Corporation. All rights reserved.
- *--------------------------------------------------------*/
-
-import { MockDebugSession } from './mockDebug';
+import { XrunDebugSession } from './xrunDebug';
 
 import { promises as fs } from 'fs';
 import * as Net from 'net';
-import { FileAccessor } from './mockRuntime';
+import { FileAccessor } from './xrunRuntime';
 
 /*
  * debugAdapter.js is the entrypoint of the debug adapter when it runs as a separate process.
@@ -25,16 +21,6 @@ const fsAccessor:  FileAccessor = {
 		return fs.writeFile(path, contents);
 	}
 };
-
-/*
- * When the debug adapter is run as an external process,
- * normally the helper function DebugSession.run(...) takes care of everything:
- *
- * 	MockDebugSession.run(MockDebugSession);
- *
- * but here the helper is not flexible enough to deal with a debug session constructors with a parameter.
- * So for now we copied and modified the helper:
- */
 
 // first parse command line arguments to see whether the debug adapter should run as a server
 let port = 0;
@@ -55,14 +41,14 @@ if (port > 0) {
 		socket.on('end', () => {
 			console.error('>> client connection closed\n');
 		});
-		const session = new MockDebugSession(fsAccessor);
+		const session = new XrunDebugSession(fsAccessor);
 		session.setRunAsServer(true);
 		session.start(socket, socket);
 	}).listen(port);
 } else {
 
 	// start a single session that communicates via stdin/stdout
-	const session = new MockDebugSession(fsAccessor);
+	const session = new XrunDebugSession(fsAccessor);
 	process.on('SIGTERM', () => {
 		session.shutdown();
 	});
