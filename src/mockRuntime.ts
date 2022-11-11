@@ -38,12 +38,6 @@ interface IRuntimeStack {
 	frames: IRuntimeStackFrame[];
 }
 
-interface RuntimeDisassembledInstruction {
-	address: number;
-	instruction: string;
-	line?: number;
-}
-
 export type IRuntimeVariableType = number | boolean | string | RuntimeVariable[];
 
 export class RuntimeVariable {
@@ -105,9 +99,6 @@ export class MockRuntime extends EventEmitter {
 
 	// the contents (= lines) of the one and only file
 	private sourceLines: string[] = [];
-	private instructions: Word[] = [];
-	private starts: number[] = [];
-	private ends: number[] = [];
 
 	private scopes: string[] = [];
 
@@ -118,27 +109,20 @@ export class MockRuntime extends EventEmitter {
 	}
 	private set currentLine(x) {
 		this._currentLine = x;
-		this.instruction = this.starts[x];
 	}
 	private stepping: boolean = false;
 	private stopHit: boolean = false;
 	private stopEventString: 'stopOnBreakpoint' | 'stopOnDataBreakpoint' = 'stopOnBreakpoint';
 
-	// This is the next instruction that will be 'executed'
 	public instruction= 0;
 
 	// maps from sourceFile to array of IRuntimeBreakpoint
 	private breakPoints = new Map<string, IRuntimeBreakpoint[]>();
 	private dataBreakpoints = new Array<string>();
 
-	// all instruction breakpoint addresses
-	private instructionBreakpoints = new Set<number>();
-
 	// since we want to send breakpoint events, we will assign an id to every event
 	// so that the frontend can match events with breakpoints.
 	private breakpointId = 1;
-
-	private breakAddresses = new Map<string, string>();
 
 	ls = require("child_process").spawn("/bin/sh", {
 		shell: false,
@@ -424,23 +408,6 @@ export class MockRuntime extends EventEmitter {
 		return undefined;
 	}
 
-	/*
-	 * Clear breakpoint in file with given line.
-	 * FIXME: For some reason, this function is never called, probably redundant / not useful
-	 */
-	public clearBreakPoint(path: string, line: number): IRuntimeBreakpoint | undefined {
-		const bps = this.breakPoints.get(path);
-		if (bps) {
-			const index = bps.findIndex(bp => bp.line === line);
-			if (index >= 0) {
-				const bp = bps[index];
-				bps.splice(index, 1);
-				return bp;
-			}
-		}
-		return undefined;
-	}
-
 	public clearBreakpoints(path: string): void {
 		const bps = this.breakPoints.get(path);
 		if(bps){
@@ -469,15 +436,6 @@ export class MockRuntime extends EventEmitter {
 			this.sendSimulatorTerminalCommand(`stop -delete ${this.dataBreakpoints.join(' ')}`);
 			this.dataBreakpoints = [];
 		}
-	}
-
-	public setInstructionBreakpoint(address: number): boolean {
-		this.instructionBreakpoints.add(address);
-		return true;
-	}
-
-	public clearInstructionBreakpoints(): void {
-		this.instructionBreakpoints.clear();
 	}
 
 	private async parseSimulatorVariablesResponse(scope: string, mode: 'scope' | 'structuredVariable') : Promise<RuntimeVariable[]> {
@@ -648,31 +606,6 @@ export class MockRuntime extends EventEmitter {
 		return undefined;
 	}
 
-	/**
-	 * Return words of the given address range as "instructions"
-	 */
-	public disassemble(address: number, instructionCount: number): RuntimeDisassembledInstruction[] {
-
-		const instructions: RuntimeDisassembledInstruction[] = [];
-
-		for (let a = address; a < address + instructionCount; a++) {
-			if (a >= 0 && a < this.instructions.length) {
-				instructions.push({
-					address: a,
-					instruction: this.instructions[a].name,
-					line: this.instructions[a].line
-				});
-			} else {
-				instructions.push({
-					address: a,
-					instruction: 'nop'
-				});
-			}
-		}
-
-		return instructions;
-	}
-
 	// private methods
 
 	private getLine(line?: number): string {
@@ -690,52 +623,10 @@ export class MockRuntime extends EventEmitter {
 		return words;
 	}
 
-	private async loadSource(file: string): Promise<void> {
-		if (this._sourceFile !== file) {
-			this._sourceFile = this.normalizePathAndCasing(file);
-		}
-	}
-
-	private async verifyBreakpoints(path: string): Promise<void> {
-
-		const bps = this.breakPoints.get(path);
-		if (bps) {
-			await this.loadSource(path);
-			bps.forEach(bp => {
-				if (!bp.verified && bp.line < this.sourceLines.length) {
-					const srcLine = this.getLine(bp.line);
-
-					// if a line is empty or starts with '+' we don't allow to set a breakpoint but move the breakpoint down
-					if (srcLine.length === 0 || srcLine.indexOf('+') === 0) {
-						bp.line++;
-					}
-					// if a line starts with '-' we don't allow to set a breakpoint but move the breakpoint up
-					if (srcLine.indexOf('-') === 0) {
-						bp.line--;
-					}
-					// don't set 'verified' to true if the line contains the word 'lazy'
-					// in this case the breakpoint will be verified 'lazy' after hitting it once.
-					if (srcLine.indexOf('lazy') < 0) {
-						bp.verified = true;
-						this.sendEvent('breakpointValidated', bp);
-					}
-				}
-			});
-		}
-	}
-
 	private sendEvent(event: string, ... args: any[]): void {
 		setTimeout(() => {
 			this.emit(event, ...args);
 		}, 0);
-	}
-
-	private normalizePathAndCasing(path: string) {
-		if (this.fileAccessor.isWindows) {
-			return path.replace(/\//g, '\\').toLowerCase();
-		} else {
-			return path.replace(/\\/g, '/');
-		}
 	}
 
 	private sendSimulatorTerminalCommand(cmd: string){
