@@ -5,6 +5,7 @@
 import { EventEmitter } from 'events';
 import { Subject } from 'await-notify';
 import fs = require('fs');
+import async = require('async');
 
 export interface FileAccessor {
 	isWindows: boolean;
@@ -69,22 +70,6 @@ export function timeout(ms: number) {
 	return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-class EventEmitterQueue extends EventEmitter{
-	private q: any;
-	constructor() { 
-		super();
-		this.q = []; 
-	}
-
-	push(item){ 
-		this.q.push(item); 
-		this.emit("data");
-	}
-	pop(){ 
-		return this.q.shift(); 
-	}
-}
-
 /**
  * A Mock runtime with minimal debugger functionality.
  * MockRuntime is a hypothetical (aka "Mock") "execution engine with debugging support":
@@ -136,12 +121,15 @@ export class MockRuntime extends EventEmitter {
 		this.instruction = this.starts[x];
 	}
 	private stepping: boolean = false;
+	private stopHit: boolean = false;
+	private stopEventString: 'stopOnBreakpoint' | 'stopOnDataBreakpoint' = 'stopOnBreakpoint';
 
 	// This is the next instruction that will be 'executed'
 	public instruction= 0;
 
 	// maps from sourceFile to array of IRuntimeBreakpoint
 	private breakPoints = new Map<string, IRuntimeBreakpoint[]>();
+	private dataBreakpoints = new Array<string>();
 
 	// all instruction breakpoint addresses
 	private instructionBreakpoints = new Set<number>();
@@ -151,8 +139,6 @@ export class MockRuntime extends EventEmitter {
 	private breakpointId = 1;
 
 	private breakAddresses = new Map<string, string>();
-
-	private queue = new EventEmitterQueue();
 
 	ls = require("child_process").spawn("/bin/sh", {
 		shell: false,
@@ -179,7 +165,11 @@ export class MockRuntime extends EventEmitter {
 
 		this.readline_interface.on('line', (line: string) => {
 			this.sendEvent("output", "out", line, "", 0, 0);
-			this.queue.push(line);
+			this.messageQueue.push(line, (error, line)=>{
+				if(error){
+					console.log(`An error occurred while processing line ${line}`);
+				}
+			});
 		});
 		
 		this.ls.stderr.on("data", (data: string) => {
@@ -193,13 +183,9 @@ export class MockRuntime extends EventEmitter {
 		this.ls.on("close", (code: any) => {
 			console.log(`child process exited with code ${code}`);
 		});
-
-		this.queue.on("data", (data: string) => {
-			this.onStdOut(this.queue.pop());
-		});
 	}
 
-	public async onStdOut(line: string): Promise<void>{
+	messageQueue = async.queue((line: string, completed) => {
 		/* Simulation has completed and initial command has been echoed back, terminate */
 		if(line.search(/\$finish;/) !== -1){
 			this.sendSimulatorTerminalCommand("exit");
@@ -213,18 +199,22 @@ export class MockRuntime extends EventEmitter {
 			console.log("DETECTED INITIAL STOP");
 			this.sendSimulatorTerminalCommand("run");
 		}
-		else if(line.search(/\(stop\s\d+:/) !== -1){
-			let bp_line_idx: number = line.search(/:\d+\)/);
-			let bp_line_str: string = line.substring(bp_line_idx + 1, line.length - 1);
-			let bp_file_str: string = line.substring(line.search(/\(stop\s\d+:/) + 11, bp_line_idx);
+		else if(line.search(/\(stop\s(\d+|[a-z_][a-z0-9_\[\]\.]*):/) !== -1){
+			if(line.search(/\(stop\s\d+/) !== -1)
+				this.stopEventString = 'stopOnBreakpoint';
+			else
+				this.stopEventString = 'stopOnDataBreakpoint';
+			this.stopHit = true;
+		}
+		else if(this.stopHit && line.search(/(..\/)*[a-z_][a-z0-9_\/]*\.(sv|v|vams|vh|svh):\d+\s/) !== -1){
+			this.stopHit = false;
+			let ddot_index: number = line.search(/:\d+\s/);
+			let bp_file_str: string = line.substring(0, ddot_index);
+			let bp_line_str: string = line.substring(line.search(/:\d+\s/) + 1, line.indexOf(' ', ddot_index));
+			this._sourceFile = this.env + '/' + bp_file_str;
+			this.currentLine = parseInt(bp_line_str) - 1; // Editor lines are zero-based
 			console.log("BREAKPOINT HIT");
-			for (const path of this.breakPoints.keys()){
-				if(path.search(bp_file_str) !== -1){
-					this._sourceFile = path;
-				}
-			}
-			this.currentLine = parseInt(bp_line_str) - 1;
-			this.sendEvent('stopOnBreakpoint');
+			this.sendEvent(this.stopEventString);
 		}
 		else if(this.stepping && line.search(/xcelium>\s\S+\.(sv|v|vams|vh|svh):\d+\s/) !== -1){ // Make xcelium>\s optional for data breakpoints
 			let step_line_idx: number = line.search(/:\d+\s/);
@@ -251,7 +241,9 @@ export class MockRuntime extends EventEmitter {
 			}
 			this.launch_done.notify();
 		}
-	}
+
+		completed(null);
+	}, 1);
 
 
 	/**
@@ -456,15 +448,19 @@ export class MockRuntime extends EventEmitter {
 		this.breakPoints.delete(path);
 	}
 
-	public setDataBreakpoint(dataName: string): boolean {
-		// TODO: Find a way to parse data breakpoints being hit without getting false positives
-		//this.sendSimulatorTerminalCommand("stop -create -object " + dataName + " -name " + dataName);
+	public setDataBreakpoint(varName: string): boolean {
+		// TODO: Check response for errors
+		this.dataBreakpoints.push(varName);
+		this.sendSimulatorTerminalCommand("stop -create -object " + varName + " -name " + varName);
 
-		return false;
+		return true;
 	}
 
 	public clearAllDataBreakpoints(): void {
-		this.breakAddresses.clear();
+		if(this.dataBreakpoints.length > 0){
+			this.sendSimulatorTerminalCommand(`stop -delete ${this.dataBreakpoints.join(' ')}`);
+			this.dataBreakpoints = [];
+		}
 	}
 
 	public setInstructionBreakpoint(address: number): boolean {
