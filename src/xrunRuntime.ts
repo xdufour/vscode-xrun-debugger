@@ -82,6 +82,8 @@ export class XrunRuntime extends EventEmitter {
 	private launch_done = new Subject();
 	private pending_data = new Subject();
 
+	private sendOutputToClient: boolean = true;
+
 	// the contents (= lines) of the one and only file
 	private sourceLines: string[] = [];
 
@@ -133,7 +135,6 @@ export class XrunRuntime extends EventEmitter {
 		});
 
 		this.readline_interface.on('line', (line: string) => {
-			this.sendEvent("output", "out", line, "", 0, 0);
 			this.messageQueue.push(line, (error, line)=>{
 				if(error){
 					console.log(`An error occurred while processing line ${line}`);
@@ -209,6 +210,12 @@ export class XrunRuntime extends EventEmitter {
 				this.sendSimulatorTerminalCommand("run");
 			}
 			this.launch_done.notify();
+		}
+		else {
+			if (this.sendOutputToClient == true)
+				this.sendEvent("output", "out", line, "", 0, 0);
+			else
+				console.log(line);
 		}
 
 		completed(null);
@@ -643,8 +650,10 @@ export class XrunRuntime extends EventEmitter {
 
 	private async sendCommandWaitResponse(cmd: string, timeout:number = 1000): Promise<string[]>{
 		this.stdout_data = [];
+		this.sendOutputToClient = false;
 		this.sendSimulatorTerminalCommand(cmd);
 		await this.pending_data.wait(timeout);
+		this.sendOutputToClient = true;
 		return this.stdout_data;
 	}
 }
