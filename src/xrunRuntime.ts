@@ -349,6 +349,7 @@ export class XrunRuntime extends EventEmitter {
 					this.scopes.push(fullscope.substring(0, m.index));
 				}
 			} while(m);
+			this.scopes.push(fullscope);
 		}
 
 		return {

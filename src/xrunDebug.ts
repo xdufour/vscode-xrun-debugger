@@ -354,7 +354,8 @@ export class XrunDebugSession extends LoggingDebugSession {
 		let scopes: DebugProtocol.Scope[] = [];
 
 		scopes_str.map((s) => {
-			scopes.push(new Scope(s, this._variableHandles.create(s), false));
+			// FIXME: Flagging as expensive is a workaround for the variables being put under the wrong scope by VariablesRequest
+			scopes.push(new Scope(s, this._variableHandles.create(s), true)); 
 		});
 		response.body = {
 			scopes: scopes
