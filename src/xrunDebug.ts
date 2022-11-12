@@ -11,12 +11,12 @@ import {
 	logger,
 	LoggingDebugSession,
 	InitializedEvent, TerminatedEvent, StoppedEvent, BreakpointEvent, OutputEvent,
-	ProgressStartEvent, ProgressUpdateEvent, ProgressEndEvent, InvalidatedEvent,
+	InvalidatedEvent,
 	Thread, StackFrame, Scope, Source, Handles, Breakpoint
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { basename } from 'path-browserify';
-import { XrunRuntime, IRuntimeBreakpoint, FileAccessor, RuntimeVariable, timeout } from './xrunRuntime';
+import { XrunRuntime, IRuntimeBreakpoint, FileAccessor, RuntimeVariable } from './xrunRuntime';
 import { Subject } from 'await-notify';
 import { LogLevel } from '@vscode/debugadapter/lib/logger';
 
@@ -59,11 +59,6 @@ export class XrunDebugSession extends LoggingDebugSession {
 
 	private _cancellationTokens = new Map<number, boolean>();
 
-	private _reportProgress = false;
-	private _progressId = 10000;
-	private _cancelledProgressId: string | undefined = undefined;
-	private _isProgressCancellable = true;
-
 	private _valuesInHex = true;
 	private _useInvalidatedEvent = false;
 
@@ -80,7 +75,7 @@ export class XrunDebugSession extends LoggingDebugSession {
 		this.setDebuggerLinesStartAt1(false);
 		this.setDebuggerColumnsStartAt1(false);
 
-		this._runtime = new XrunRuntime(fileAccessor);
+		this._runtime = new XrunRuntime();
 
 		// setup event handlers
 		this._runtime.on('stopOnEntry', () => {
@@ -146,10 +141,6 @@ export class XrunDebugSession extends LoggingDebugSession {
 	 * to interrogate the features the debug adapter provides.
 	 */
 	protected initializeRequest(response: DebugProtocol.InitializeResponse, args: DebugProtocol.InitializeRequestArguments): void {
-
-		if (args.supportsProgressReporting) {
-			this._reportProgress = true;
-		}
 		if (args.supportsInvalidatedEvent) {
 			this._useInvalidatedEvent = true;
 		}
@@ -270,7 +261,7 @@ export class XrunDebugSession extends LoggingDebugSession {
 		const actualBreakpoints0 = clientLines.map(async l => {
 			const runtime_bp = await this._runtime.setBreakPoint(path, l);
 			if(runtime_bp){
-				const bp = new Breakpoint(runtime_bp.verified, this.convertDebuggerLineToClient(runtime_bp.line)) as DebugProtocol.Breakpoint;
+				const bp = new Breakpoint(runtime_bp.verified, runtime_bp.line) as DebugProtocol.Breakpoint;
 				bp.id = runtime_bp.id;
 				return bp;
 			}
@@ -344,11 +335,6 @@ export class XrunDebugSession extends LoggingDebugSession {
 				if (typeof f.column === 'number') {
 					sf.column = this.convertDebuggerColumnToClient(f.column);
 				}
-				if (typeof f.instruction === 'number') {
-					const address = this.formatAddress(f.instruction);
-					sf.name = `${f.name} ${address}`;
-					sf.instructionPointerReference = address;
-				}
 
 				return sf;
 			}),
@@ -376,44 +362,6 @@ export class XrunDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
-	/*protected async writeMemoryRequest(response: DebugProtocol.WriteMemoryResponse, { data, memoryReference, offset = 0 }: DebugProtocol.WriteMemoryArguments) {
-		const variable = this._variableHandles.get(Number(memoryReference));
-		if (typeof variable === 'object') {
-			const decoded = base64.toByteArray(data);
-			variable.setMemory(decoded, offset);
-			response.body = { bytesWritten: decoded.length };
-		} else {
-			response.body = { bytesWritten: 0 };
-		}
-
-		this.sendResponse(response);
-		this.sendEvent(new InvalidatedEvent(['variables']));
-	}
-
-	protected async readMemoryRequest(response: DebugProtocol.ReadMemoryResponse, { offset = 0, count, memoryReference }: DebugProtocol.ReadMemoryArguments) {
-		const variable = this._variableHandles.get(Number(memoryReference));
-		if (typeof variable === 'object' && variable.memory) {
-			const memory = variable.memory.subarray(
-				Math.min(offset, variable.memory.length),
-				Math.min(offset + count, variable.memory.length),
-			);
-
-			response.body = {
-				address: offset.toString(),
-				data: base64.fromByteArray(memory),
-				unreadableBytes: count - memory.length
-			};
-		} else {
-			response.body = {
-				address: offset.toString(),
-				data: '',
-				unreadableBytes: count
-			};
-		}
-
-		this.sendResponse(response);
-	}*/
-
 	protected async variablesRequest(response: DebugProtocol.VariablesResponse, args: DebugProtocol.VariablesArguments, request?: DebugProtocol.Request): Promise<void> {
 
 		let vs: RuntimeVariable[] = [];
@@ -427,25 +375,30 @@ export class XrunDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
-	/*protected setVariableRequest(response: DebugProtocol.SetVariableResponse, args: DebugProtocol.SetVariableArguments): void {
-		const container = this._variableHandles.get(args.variablesReference);
-		const rv = container === 'locals'
-			? this._runtime.getVariable(args.name)
-			: container instanceof RuntimeVariable && container.value instanceof Array
-			? container.value.find(v => v.name === args.name)
-			: undefined;
+	protected setVariableRequest(response: DebugProtocol.SetVariableResponse, args: DebugProtocol.SetVariableArguments): void {
+		/*if (args.variablesReference) {
+			const v = this._variableHandles.get(args.variablesReference);
+		} else {
+
+		}*/
+		const rv = this._runtime.getVariable(args.name);
+
+		const regExp = /\d*?('(d|h|b))[0-9a-f]+/ig;
 
 		if (rv) {
-			rv.value = this.convertToRuntime(args.value);
-			response.body = this.convertFromRuntime(rv);
-
-			if (rv.memory && rv.reference) {
-				this.sendEvent(new MemoryEvent(String(rv.reference), 0, rv.memory.length));
+			if(rv.type.search(/^string/) !== -1){
+				if(args.value.search(regExp) !== -1){ 
+					this._runtime.setVariable(args.name, args.value);
+				}
 			}
+			else {
+				this._runtime.setVariable(args.name, args.value);
+			}
+			response.body = this.convertFromRuntime(rv);
 		}
 
 		this.sendResponse(response);
-	}*/
+	}
 
 	protected continueRequest(response: DebugProtocol.ContinueResponse, args: DebugProtocol.ContinueArguments): void {
 		this._runtime.continue();
@@ -538,37 +491,6 @@ export class XrunDebugSession extends LoggingDebugSession {
 		}
 	}
 
-	private async progressSequence() {
-
-		const ID = '' + this._progressId++;
-
-		await timeout(100);
-
-		const title = this._isProgressCancellable ? 'Cancellable operation' : 'Long running operation';
-		const startEvent: DebugProtocol.ProgressStartEvent = new ProgressStartEvent(ID, title);
-		startEvent.body.cancellable = this._isProgressCancellable;
-		this._isProgressCancellable = !this._isProgressCancellable;
-		this.sendEvent(startEvent);
-		this.sendEvent(new OutputEvent(`start progress: ${ID}\n`));
-
-		let endMessage = 'progress ended';
-
-		for (let i = 0; i < 100; i++) {
-			await timeout(500);
-			this.sendEvent(new ProgressUpdateEvent(ID, `progress: ${i}`));
-			if (this._cancelledProgressId === ID) {
-				endMessage = 'progress cancelled';
-				this._cancelledProgressId = undefined;
-				this.sendEvent(new OutputEvent(`cancel progress: ${ID}\n`));
-				break;
-			}
-		}
-		this.sendEvent(new ProgressEndEvent(ID, endMessage));
-		this.sendEvent(new OutputEvent(`end progress: ${ID}\n`));
-
-		this._cancelledProgressId = undefined;
-	}
-
 	protected dataBreakpointInfoRequest(response: DebugProtocol.DataBreakpointInfoResponse, args: DebugProtocol.DataBreakpointInfoArguments): void {
 
 		response.body = {
@@ -580,8 +502,10 @@ export class XrunDebugSession extends LoggingDebugSession {
 
 		if (args.variablesReference) {
 			const v = this._variableHandles.get(args.variablesReference);
+			response.body.dataId = v + '.' + args.name;
+		} else {
+			response.body.dataId = args.name;
 		}
-		response.body.dataId = args.name;
 		response.body.description = args.name;
 		response.body.accessTypes = [ "write" ]; // read, readWrite
 		response.body.canPersist = false;
@@ -649,9 +573,6 @@ export class XrunDebugSession extends LoggingDebugSession {
 		if (args.requestId) {
 			this._cancellationTokens.set(args.requestId, true);
 		}
-		if (args.progressId) {
-			this._cancelledProgressId= args.progressId;
-		}
 	}
 
 	protected customRequest(command: string, response: DebugProtocol.Response, args: any) {
@@ -706,14 +627,6 @@ export class XrunDebugSession extends LoggingDebugSession {
 		}
 
 		return dapVariable;
-	}
-
-	private formatAddress(x: number, pad = 8) {
-		return this._addressesInHex ? '0x' + x.toString(16).padStart(8, '0') : x.toString(10);
-	}
-
-	private formatNumber(x: number) {
-		return this._valuesInHex ? '0x' + x.toString(16) : x.toString(10);
 	}
 
 	private createSource(filePath: string): Source {

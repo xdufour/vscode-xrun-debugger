@@ -116,7 +116,7 @@ export class XrunRuntime extends EventEmitter {
 	readline = require("readline"); 
 	readline_interface = this.readline.createInterface({ input: this.ls.stdout });
 
-	constructor(private fileAccessor: FileAccessor) {
+	constructor() {
 		super();
 
 		this.ls.stdout.setEncoding('utf-8');
@@ -446,7 +446,7 @@ export class XrunRuntime extends EventEmitter {
 						let name_idx: number = line.search(/\s[a-z_][a-z0-9_]*(\s\[.*\])?\s=/i);
 						type = line.substring(0, name_idx).replace(new RegExp(`(${sv_attributes.join('|')})` , 'g'), '').trimLeft();
 						name = line.substring(name_idx, line.search('=')).replace(/\s/g, '');
-						value = line.substring(line.search('=') + 1).replace(/\s?\(.*\)/, ''); 
+						value = line.substring(line.search('=') + 1).replace(/(\s+)?\(.*\)/g, ''); 
 						size = 1;
 						// TODO: Maybe add something for the derived class inheritance indicated at the end of the string
 
@@ -550,11 +550,11 @@ export class XrunRuntime extends EventEmitter {
 		
 		if(this.scopes.includes(refName)){
 			vars = await this.parseSimulatorVariablesResponse(refName, 'scope');
-			this.variables.set(refName, vars);
 		}
 		else {
 			vars = await this.parseSimulatorVariablesResponse(refName, 'structuredVariable');
 		}
+		this.variables.set(refName, vars);
 		return vars;
 	}
 
@@ -582,13 +582,17 @@ export class XrunRuntime extends EventEmitter {
 
 	public getVariable(name: string): RuntimeVariable | undefined {
 		for(let [_, variables] of this.variables.entries()){
-			variables.forEach(v => {
+			for(const v of variables){
 				if(v.name == name){
 					return v;
 				}
-			});
+			}
 		}
 		return undefined;
+	}
+
+	public setVariable(name: string, value: string){
+		this.sendSimulatorTerminalCommand('deposit ' + name + ' = #' + value + ' -after 0 -relative');
 	}
 
 	// private methods
