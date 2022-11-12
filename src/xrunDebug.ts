@@ -19,6 +19,7 @@ import { basename } from 'path-browserify';
 import { XrunRuntime, IRuntimeBreakpoint, FileAccessor, RuntimeVariable } from './xrunRuntime';
 import { Subject } from 'await-notify';
 import { LogLevel } from '@vscode/debugadapter/lib/logger';
+import async = require('async');
 
 /**
  * This interface describes the xrun-debug specific launch attributes
@@ -134,6 +135,8 @@ export class XrunDebugSession extends LoggingDebugSession {
 			this.sendEvent(e);
 			this.sendEvent(new TerminatedEvent());
 		});
+
+		
 	}
 
 	/**
@@ -222,10 +225,6 @@ export class XrunDebugSession extends LoggingDebugSession {
 		}
 		
 		console.log(`disconnectRequest suspend: ${args.suspendDebuggee}, terminate: ${args.terminateDebuggee}`);
-	}
-
-	protected async attachRequest(response: DebugProtocol.AttachResponse, args: IAttachRequestArguments) {
-		return this.launchRequest(response, args);
 	}
 
 	protected async launchRequest(response: DebugProtocol.LaunchResponse, args: ILaunchRequestArguments) {
@@ -354,8 +353,7 @@ export class XrunDebugSession extends LoggingDebugSession {
 		let scopes: DebugProtocol.Scope[] = [];
 
 		scopes_str.map((s) => {
-			// FIXME: Flagging as expensive is a workaround for the variables being put under the wrong scope by VariablesRequest
-			scopes.push(new Scope(s, this._variableHandles.create(s), true)); 
+			scopes.push(new Scope(s, this._variableHandles.create(s), false)); 
 		});
 		response.body = {
 			scopes: scopes
@@ -363,13 +361,29 @@ export class XrunDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
-	protected async variablesRequest(response: DebugProtocol.VariablesResponse, args: DebugProtocol.VariablesArguments, request?: DebugProtocol.Request): Promise<void> {
+	variablesRequestQueue = async.queue((params: any, completed) => {
+		var args: DebugProtocol.VariablesArguments = params.args;
+		var response: DebugProtocol.VariablesResponse = params.response;
 		const v = this._variableHandles.get(args.variablesReference);
+		console.error('Requesting variables for ' + v);
 		this._runtime.fetchVariables(v).then((vars :RuntimeVariable[]) => {
 			response.body = {
 				variables: vars.map(v => this.convertFromRuntime(v))
 			};
+			console.error('Sending variables response for ' + v);
 			this.sendResponse(response);
+			completed(null);
+		}).catch(() => {
+			this.sendResponse(response);
+			completed(new Error(`Error requesting variables for + ${v}`));
+		});
+	}, 1);
+
+	protected async variablesRequest(response: DebugProtocol.VariablesResponse, args: DebugProtocol.VariablesArguments, request?: DebugProtocol.Request): Promise<void> {
+		this.variablesRequestQueue.push({args, response}, (error)=>{
+			if(error){
+				console.error(error.message);
+			}
 		});
 	}
 
