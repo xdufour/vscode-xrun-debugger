@@ -185,7 +185,7 @@ export class XrunRuntime extends EventEmitter {
 			console.log("BREAKPOINT HIT");
 			this.sendEvent(this.stopEventString);
 		}
-		else if(this.stepping && line.search(/xcelium>\s\S+\.(sv|v|vams|vh|svh):\d+\s/) !== -1){ // Make xcelium>\s optional for data breakpoints
+		else if(this.stepping && line.search(/(xcelium>\s)?\S+\.(sv|v|vams|vh|svh):\d+\s/) !== -1){
 			let step_line_idx: number = line.search(/:\d+\s/);
 			var m = /:\d+\s/.exec(line);
 			let step_line_str: string = '';
@@ -242,7 +242,7 @@ export class XrunRuntime extends EventEmitter {
 	}
 
 	/**
-	 * Continue execution to the end/beginning.
+	 * _Continue_: Resume execution flow until the next breakpoint is hit or the simulation ends.
 	 */
 	public continue() {
 		console.log("RUNTIME.CONTINUE");
@@ -250,30 +250,49 @@ export class XrunRuntime extends EventEmitter {
 	}
 
 	/**
-	 * "Step": Run one behavioral statement, stepping over subprogram calls
+	 * _Step Over_: Run one behavioral statement, stepping over subprogram calls. If current execution is a Verilog process,
+	 * stops at the next line of executable code within the current process.
 	 */
 	public step() {
-		// TODO: Fix for use in Verilog code
 		this.stepping = true;
-		this.sendSimulatorTerminalCommand("run -next");
+		if(this._sourceFile.search(/\.svh?$/) !== -1){
+			this.sendSimulatorTerminalCommand("run -next");
+		} else {
+			// -adjacent is only supported in verilog processes
+			this.sendSimulatorTerminalCommand("run -adjacent"); 
+		}
 	}
 
 	/**
-	 * "Step into": Run one behavioral statement, stepping into subprogram calls
+	 * _Step Into_: Run one behavioral statement, stepping into subprogram calls. If current execution is a Verilog process,
+	 * has the same effect as using _Step Over_
 	 */
 	public stepIn(targetId: number | undefined) {
 		this.stepping = true;
-		this.sendSimulatorTerminalCommand("run -step");
+		if(this._sourceFile.search(/\.svh?$/) !== -1){
+			this.sendSimulatorTerminalCommand("run -step");
+		} else {
+			// -adjacent is only supported in verilog processes
+			this.sendSimulatorTerminalCommand("run -adjacent"); 
+		}
 	}
 
 	/**
-	 * "Step out": Run until the current subprogram ends
+	 * _Step Out_: Run until the current subprogram ends. If current execution is a Verilog process, will instead let the simulator
+	 * stop at the next line of executable code, anywhere in the design hierarchy.
 	 */
 	public stepOut() {
 		this.stepping = true;
-		this.sendSimulatorTerminalCommand("run -return");
+		if(this._sourceFile.search(/\.svh?$/) !== -1){
+			this.sendSimulatorTerminalCommand("run -return");
+		} else {
+			// -step lets simulator stop anywhere in the design hierarchy, which is probably the best expected behavior of "step out"
+			// since -return will return an error if not inside a subprogram
+			this.sendSimulatorTerminalCommand("run -step"); 
+		}
 	}
 
+	// TODO: Support functionality
 	public getStepInTargets(frameId: number): IRuntimeStepInTargets[] {
 
 		const line = this.getLine();
