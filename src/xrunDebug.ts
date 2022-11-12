@@ -364,16 +364,13 @@ export class XrunDebugSession extends LoggingDebugSession {
 	}
 
 	protected async variablesRequest(response: DebugProtocol.VariablesResponse, args: DebugProtocol.VariablesArguments, request?: DebugProtocol.Request): Promise<void> {
-
-		let vs: RuntimeVariable[] = [];
-
 		const v = this._variableHandles.get(args.variablesReference);
-		vs = await this._runtime.fetchVariables(v);
-
-		response.body = {
-			variables: vs.map(v => this.convertFromRuntime(v))
-		};
-		this.sendResponse(response);
+		this._runtime.fetchVariables(v).then((vars :RuntimeVariable[]) => {
+			response.body = {
+				variables: vars.map(v => this.convertFromRuntime(v))
+			};
+			this.sendResponse(response);
+		});
 	}
 
 	protected setVariableRequest(response: DebugProtocol.SetVariableResponse, args: DebugProtocol.SetVariableArguments): void {

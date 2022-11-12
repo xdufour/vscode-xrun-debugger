@@ -546,15 +546,10 @@ export class XrunRuntime extends EventEmitter {
 	}
 
 	public async fetchVariables(refName: string): Promise<RuntimeVariable[]> {
-		let vars: RuntimeVariable[] = [];
+		let parserMode: 'scope' | 'structuredVariable' = this.scopes.includes(refName) ? 'scope' : 'structuredVariable';
 		this.variables.delete(refName);
 		
-		if(this.scopes.includes(refName)){
-			vars = await this.parseSimulatorVariablesResponse(refName, 'scope');
-		}
-		else {
-			vars = await this.parseSimulatorVariablesResponse(refName, 'structuredVariable');
-		}
+		var vars = await this.parseSimulatorVariablesResponse(refName, parserMode);
 		this.variables.set(refName, vars);
 		return vars;
 	}
