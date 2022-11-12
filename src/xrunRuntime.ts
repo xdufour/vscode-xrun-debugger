@@ -533,7 +533,7 @@ export class XrunRuntime extends EventEmitter {
 						for(let i = 0; i < names.length; i++) {
 							lines = await this.sendCommandWaitResponse("describe " + scope + "." + names[i]);
 							line = lines.shift();
-							if(line){
+							if(line && line.search(/\*E,PVLIDX/) === -1){
 								value = line.substring(line.search('=') + 1);
 								vars.push(new RuntimeVariable(names[i], value, types[i], 0));
 							}
