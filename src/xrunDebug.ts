@@ -42,9 +42,6 @@ interface ILaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
 	noDebug?: boolean;
 }
 
-interface IAttachRequestArguments extends ILaunchRequestArguments { }
-
-
 export class XrunDebugSession extends LoggingDebugSession {
 
 	// we don't support multiple threads, so we can use a hardcoded ID for the default thread
@@ -62,8 +59,6 @@ export class XrunDebugSession extends LoggingDebugSession {
 
 	private _valuesInHex = true;
 	private _useInvalidatedEvent = false;
-
-	private _addressesInHex = true;
 
 	/**
 	 * Creates a new debug adapter that is used for one debug session.
@@ -292,20 +287,6 @@ export class XrunDebugSession extends LoggingDebugSession {
 				breakpoints: []
 			};
 		}
-		this.sendResponse(response);
-	}
-
-	protected exceptionInfoRequest(response: DebugProtocol.ExceptionInfoResponse, args: DebugProtocol.ExceptionInfoArguments) {
-		response.body = {
-			exceptionId: 'Exception ID',
-			description: 'This is a descriptive description of the exception.',
-			breakMode: 'always',
-			details: {
-				message: 'Message contained in the exception.',
-				typeName: 'Short type name of the exception object',
-				stackTrace: 'stack frame 1\nstack frame 2',
-			}
-		};
 		this.sendResponse(response);
 	}
 
