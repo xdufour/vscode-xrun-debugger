@@ -125,13 +125,17 @@ export class XrunRuntime extends EventEmitter {
 
 		this.ls.stdout.on("data", (data: string) => {
 			let lines = data.split(/\r?\n/);
-			lines.forEach(line => {
-				if(line.search(/^xcelium>\s/) !== -1){
-					line = line.substring(9);	// Remove simulator output prefix from received line
+			for(var line of lines){
+				// This workaround allows us to pinpoint the end of our desired output
+				// A cleaner approach may exist
+				if(line.search(/Memory Usage/) !== -1){ 
+					console.error(`Notifying: ${lines.length} lines in stdout_data`);
+					this.pending_data.notify();
+					break;
 				}
+				line = line.replace(/^xcelium>/, ''); // Remove simulator output prefix from received line
 				this.stdout_data.push(line);
-			});
-			this.pending_data.notify();
+			};
 		});
 
 		this.readline_interface.on('line', (line: string) => {
@@ -472,14 +476,14 @@ export class XrunRuntime extends EventEmitter {
 
 		switch(mode){
 			case 'scope':
-				lines = await this.sendCommandWaitResponse("describe " + scope);
+				lines = await this.sendCommandWaitResponse("describe " + scope, 20000);
 				while(lines.length > 0){
 					line = lines.shift();
 					if(line && line.search('=') !== -1){
 						let name_idx: number = line.search(/\s[a-z_][a-z0-9_]*(\s\[.*\])?\s=/i);
 						type = line.substring(0, name_idx).replace(new RegExp(`(${sv_attributes.join('|')})` , 'g'), '').trimLeft();
 						name = line.substring(name_idx, line.search('=')).replace(/\s/g, '');
-						value = line.substring(line.search('=') + 1).replace(/(\s+)?\(.*\)/g, ''); 
+						value = line.substring(line.search('=') + 1).replace(/(\s+)?\(.*\)/g, '').trimLeft(); 
 						size = 1;
 						// TODO: Maybe add something for the derived class inheritance indicated at the end of the string
 
@@ -647,18 +651,23 @@ export class XrunRuntime extends EventEmitter {
 		}, 0);
 	}
 
-	private sendSimulatorTerminalCommand(cmd: string){
+	private sendSimulatorTerminalCommand(cmd: string, silent = false){
 		this.ls.stdin.cork();
 		this.ls.stdin.write(cmd + '\n');
 		this.ls.stdin.uncork();
-		console.log("Terminal command sent: " + cmd);
+		if(!silent)
+			console.log("Terminal command sent: " + cmd);
 	}
 
-	private async sendCommandWaitResponse(cmd: string, timeout:number = 1000): Promise<string[]>{
+	private async sendCommandWaitResponse(cmd: string, timeout:number = 5000): Promise<string[]>{
 		this.stdout_data = [];
 		this.sendOutputToClient = false;
 		this.sendSimulatorTerminalCommand(cmd);
-		await this.pending_data.wait(timeout);
+		this.sendSimulatorTerminalCommand('status', true);
+		const result = await this.pending_data.wait(timeout);
+		if(!result){
+			console.error(`Command ${cmd} has completed or timed out`);
+		}
 		this.sendOutputToClient = true;
 		return this.stdout_data;
 	}
