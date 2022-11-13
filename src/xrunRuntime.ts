@@ -83,6 +83,7 @@ export class XrunRuntime extends EventEmitter {
 	private pending_data = new Subject();
 
 	private sendOutputToClient: boolean = true;
+	private largeExpectedOutput: boolean = false;
 
 	// the contents (= lines) of the one and only file
 	private sourceLines: string[] = [];
@@ -126,16 +127,17 @@ export class XrunRuntime extends EventEmitter {
 		this.ls.stdout.on("data", (data: string) => {
 			let lines = data.split(/\r?\n/);
 			for(var line of lines){
-				// This workaround allows us to pinpoint the end of our desired output
-				// A cleaner approach may exist
-				if(line.search(/Memory Usage/) !== -1){ 
-					console.error(`Notifying: ${lines.length} lines in stdout_data`);
+				// This allows us to pinpoint the end of our desired output if it is large enough that it may not appear all in the same listener call
+				// TODO: Benchmark the performance cost of having the endcmd flag always on for safety vs the "smart tradeoff" way
+				if(this.largeExpectedOutput && line.includes('endcmd5443')){ 
 					this.pending_data.notify();
 					break;
 				}
 				line = line.replace(/^xcelium>/, ''); // Remove simulator output prefix from received line
 				this.stdout_data.push(line);
 			};
+			if(!this.largeExpectedOutput)
+				this.pending_data.notify();
 		});
 
 		this.readline_interface.on('line', (line: string) => {
@@ -160,7 +162,6 @@ export class XrunRuntime extends EventEmitter {
 	}
 
 	messageQueue = async.queue((line: string, completed) => {
-		/* Simulation has completed and initial command has been echoed back, terminate */
 		if(line.search(/\$finish;/) !== -1){
 			this.sendSimulatorTerminalCommand("exit");
 		}
@@ -441,7 +442,6 @@ export class XrunRuntime extends EventEmitter {
 	}
 
 	public async setDataBreakpoint(varName: string): Promise<boolean> {
-		// TODO: Check response for errors
 		this.dataBreakpoints.push(varName);
 		let lines = await this.sendCommandWaitResponse("stop -create -object " + varName + " -name " + varName);
 		let error = false;
@@ -476,7 +476,7 @@ export class XrunRuntime extends EventEmitter {
 
 		switch(mode){
 			case 'scope':
-				lines = await this.sendCommandWaitResponse("describe " + scope, 20000);
+				lines = await this.sendCommandWaitResponse("describe " + scope, 10000, true);
 				while(lines.length > 0){
 					line = lines.shift();
 					if(line && line.search('=') !== -1){
@@ -559,7 +559,7 @@ export class XrunRuntime extends EventEmitter {
 						// Get all names and types from the type describe command
 						while(lines.length > 0){
 							line = lines.shift();
-							if(line && line.search(/}/) === -1){
+							if(line && line.search(/}/) === -1 && line.search(/\S/) !== -1){
 								let end_of_type_idx = line.search(/\s[a-z_][a-z0-9_]*$/);
 								types.push(line.substring(0, end_of_type_idx));
 								names.push(line.substring(end_of_type_idx + 1));
@@ -659,15 +659,14 @@ export class XrunRuntime extends EventEmitter {
 			console.log("Terminal command sent: " + cmd);
 	}
 
-	private async sendCommandWaitResponse(cmd: string, timeout:number = 5000): Promise<string[]>{
+	private async sendCommandWaitResponse(cmd: string, timeout:number = 5000, expensive: boolean = false): Promise<string[]>{
 		this.stdout_data = [];
 		this.sendOutputToClient = false;
 		this.sendSimulatorTerminalCommand(cmd);
-		this.sendSimulatorTerminalCommand('status', true);
-		const result = await this.pending_data.wait(timeout);
-		if(!result){
-			console.error(`Command ${cmd} has completed or timed out`);
-		}
+		this.largeExpectedOutput = expensive;
+		if(expensive)
+			this.sendSimulatorTerminalCommand('puts endcmd5443', true);
+		await this.pending_data.wait(timeout);
 		this.sendOutputToClient = true;
 		return this.stdout_data;
 	}
