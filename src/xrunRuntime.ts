@@ -300,6 +300,7 @@ export class XrunRuntime extends EventEmitter {
 	}
 
 	// TODO: Support functionality
+	// A possible way of doing this is using stop with -subprogram option (and potentially -delbreak 1)
 	public getStepInTargets(frameId: number): IRuntimeStepInTargets[] {
 
 		const line = this.getLine();
@@ -405,7 +406,11 @@ export class XrunRuntime extends EventEmitter {
 		let bps = this.breakPoints.get(path);
 
 		// xrun format
-		// stop -create -file <filepath> -line <line# (not zero aligned)>
+		// Line breakpoint: stop -create -file <filepath> -line <line# (not zero aligned)> -all -name <id>
+		/** TODO: Implement conditional breakpoints:
+		 * Hit count: -skip <count>
+		 * Condition: -condition <tcl_expression>	 
+		 */
 		let lines = await this.sendCommandWaitResponse("stop -create -file " + path + " -line " + line + " -all -name " + bp.id);
 		if(lines.length > 0){
 			if(lines[0].search(/Created stop/) !== -1){
