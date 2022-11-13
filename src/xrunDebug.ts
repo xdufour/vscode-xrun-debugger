@@ -28,17 +28,17 @@ import async = require('async');
  * The interface should always match this schema.
  */
 interface ILaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
-	/** Absolute path to working directory */
-	env: string;
-	/** Absolute path to xrun script executable, or relative path if 'env' is specified */
+	/** Absolute path to working directory from which the program will be executed. */
+	cwd: string;
+	/** Absolute path to executable, or relative path if 'cwd' is specified. */
 	program: string;
-	/** Command line arguments. Can optionally be a path to a yml file to parse for arguments selection to be displayed, or use \"${command:AskForArguments}\" to manually enter them upon launch. */
+	/** ommand line arguments. Can optionally be a path to a yml file to parse for arguments selection to be displayed, or use \"${command:SpecifyArgs}\" to manually enter them upon launch. */
 	args: string;
-	/** Keywords to highlight in console output during a debugging session */
-	consoleKeywords: string[];
-	/** Automatically stop target after launch. If not specified, target does not stop. */
+	/** Lines that match against these keywords in the output console will be sent to stderr. */
+	problemMatchers: string[];
+	/** Automatically stop after launch. */
 	stopOnEntry?: boolean;
-	/** Run without debugging */
+	/** Run simulation without debug. */
 	noDebug?: boolean;
 }
 
@@ -51,7 +51,7 @@ export class XrunDebugSession extends LoggingDebugSession {
 
 	private _variableHandles = new Handles<string>();
 
-	private consoleKeywords: string[] = [];
+	private problemMatchers: string[] = [];
 
 	private _configurationDone = new Subject();
 
@@ -107,7 +107,7 @@ export class XrunDebugSession extends LoggingDebugSession {
 				case 'err': category = 'stderr'; break;
 				default: category = 'console'; break;
 			}
-			this.consoleKeywords.forEach((keyword: string) => {
+			this.problemMatchers.forEach((keyword: string) => {
 				if(text.search(keyword) !== -1){
 					category = 'stderr';
 				}
@@ -228,10 +228,10 @@ export class XrunDebugSession extends LoggingDebugSession {
 		//logger.setup(args.trace ? Logger.LogLevel.Verbose : Logger.LogLevel.Stop, false);
 		logger.setup(LogLevel.Verbose, false);
 
-		this.consoleKeywords = args.consoleKeywords;
+		this.problemMatchers = args.problemMatchers;
 
 		// start the program in the runtime
-		await this._runtime.start(args.env, args.program, args.args, !!args.stopOnEntry, !args.noDebug);
+		await this._runtime.start(args.cwd, args.program, args.args, !!args.stopOnEntry, !args.noDebug);
 
 		// wait 1 second until configuration has finished (and configurationDoneRequest has been called)
 		await this._configurationDone.wait(1000);
@@ -346,12 +346,12 @@ export class XrunDebugSession extends LoggingDebugSession {
 		var args: DebugProtocol.VariablesArguments = params.args;
 		var response: DebugProtocol.VariablesResponse = params.response;
 		const v = this._variableHandles.get(args.variablesReference);
-		console.error('Requesting variables for ' + v);
+		console.log('Requesting variables for ' + v);
 		this._runtime.fetchVariables(v).then((vars :RuntimeVariable[]) => {
 			response.body = {
 				variables: vars.map(v => this.convertFromRuntime(v))
 			};
-			console.error('Sending variables response for ' + v);
+			console.log('Sending variables response for ' + v);
 			this.sendResponse(response);
 			completed(null);
 		}).catch(() => {

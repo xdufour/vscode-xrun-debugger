@@ -110,7 +110,7 @@ class XrunConfigurationProvider implements vscode.DebugConfigurationProvider {
 		// if launch.json is missing or empty
 		if (config.args && config.args.search(/.*\.yml$/) !== -1) {
 			let test = await vscode.window.showQuickPick(
-				Object.keys(parse(fs.readFileSync(config.env + '/' + config.args, 'utf-8'))["tests"]),
+				Object.keys(parse(fs.readFileSync(config.cwd + '/' + config.args, 'utf-8'))["tests"]), // TODO: Change when args will allow args in string array
 				{
 					canPickMany: false
 				}

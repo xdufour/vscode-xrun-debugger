@@ -74,7 +74,7 @@ export class XrunRuntime extends EventEmitter {
 
 	private variables = new Map<string, RuntimeVariable[]>();
 
-	private env: string = '';
+	private cwd: string = '';
 	private stopOnEntry: boolean = true;
 
 	private stdout_data: string[] = [];
@@ -181,7 +181,7 @@ export class XrunRuntime extends EventEmitter {
 			let ddot_index: number = line.search(/:\d+\s/);
 			let bp_file_str: string = line.substring(0, ddot_index);
 			let bp_line_str: string = line.substring(line.search(/:\d+\s/) + 1, line.indexOf(' ', ddot_index));
-			this._sourceFile = this.env + '/' + bp_file_str;
+			this._sourceFile = this.cwd + '/' + bp_file_str;
 			this.currentLine = parseInt(bp_line_str) - 1; // Editor lines are zero-based
 			console.log("BREAKPOINT HIT");
 			this.sendEvent(this.stopEventString);
@@ -193,7 +193,7 @@ export class XrunRuntime extends EventEmitter {
 			if(m){
 				step_line_str = m[0].substring(1, m[0].length - 1);
 			}
-			let step_file_str: string = this.env + '/' + line.substring(line.substring(0, step_line_idx).search(/\S*$/));
+			let step_file_str: string = this.cwd + '/' + line.substring(line.substring(0, step_line_idx).search(/\S*$/));
 			if(fs.existsSync(step_file_str)){
 				this._sourceFile = step_file_str;
 			}
@@ -225,11 +225,12 @@ export class XrunRuntime extends EventEmitter {
 	/**
 	 * Start executing the given program.
 	 */
-	public async start(env:string, program: string, args: string, stopOnEntry: boolean, debug: boolean): Promise<void> {
-		this.env = env;
+	public async start(cwd:string, program: string, args: string, stopOnEntry: boolean, debug: boolean): Promise<void> {
+		this.cwd = cwd;
 		this.stopOnEntry = stopOnEntry;
 		
-		this.sendSimulatorTerminalCommand("cd " + this.env);
+		if(this.cwd.length > 0)
+			this.sendSimulatorTerminalCommand("cd " + this.cwd);
 
 		// TODO: Make a setting for allowing generic arguments to specify interactive run config (linedebug etc. <-> -i)
 		// This encompasses other genericities most likely
@@ -342,7 +343,7 @@ export class XrunRuntime extends EventEmitter {
 					let file_str: string = line.substring(line.search(/\sat\s/) + 4, line_idx);
 					names.push(name);
 					if(file_str.substring(0, 3) == "../") {
-						files.push(this.env.substring(0, this.env.lastIndexOf('/')) + file_str.substring(2));
+						files.push(this.cwd.substring(0, this.cwd.lastIndexOf('/')) + file_str.substring(2));
 					}
 					else {
 						files.push(file_str);
