@@ -62,9 +62,9 @@
   },
   "main": "./dist/extension.js",
   "activationEvents": [
-    "onDebugResolve:xrun",
-    "onDebugDynamicConfigurations:xrun",
-    "onCommand:extension.xrun-debug.getRunSimArgs"
+    "onLanguage:systemverilog",
+    "onLanguage:verilog",
+    "onCommand:extension.xrun-debug.SpecifyArgs"
   ],
   "workspaceTrust": {
     "request": "never"
@@ -94,34 +94,34 @@
               "program"
             ],
             "properties": {
-              "env": {
+              "cwd": {
                 "type": "string",
-                "description": "Absolute path to working directory",
+                "description": "Absolute path to working directory from which the program will be executed.",
                 "default": "${workspaceFolder}"
               },
               "program": {
                 "type": "string",
-                "description": "Absolute path to xrun script executable, or relative path if 'env' is specified",
-                "default": ""
+                "description": "Absolute path to executable, or relative path if 'cwd' is specified.",
+                "default": "xrun"
               },
               "args": {
                 "type": "string",
-                "description": "Command line arguments. Can optionally be a path to a yml file to parse for arguments selection to be displayed, or use \"${command:AskForArguments}\" to manually enter them upon launch.",
+                "description": "Command line arguments. Can optionally be a path to a yml file to parse for arguments selection to be displayed, or use \"${command:SpecifyArgs}\" to manually enter them upon launch.",
                 "default": ""
               },
-              "consoleKeywords": {
+              "problemMatchers": {
                 "type": "array",
-                "description": "Keywords to highlight in console output during a debugging session",
+                "description": "Lines that match against these keywords in the output console will be sent to stderr.",
                 "default": []
               },
               "stopOnEntry": {
                 "type": "boolean",
-                "description": "Automatically stop after launch",
+                "description": "Automatically stop after launch.",
                 "default": true
               },
               "noDebug": {
                 "type": "boolean",
-                "description": "Run simulation without debug",
+                "description": "Run simulation without debug.",
                 "default": false
               }
             }
@@ -132,29 +132,32 @@
             "type": "xrun",
             "request": "launch",
             "name": "Manual",
-            "env": "${workspaceFolder}",
-            "program": "Path to xrun script",
-            "args": "${command:AskForArguments}",
-            "stopOnEntry": true
+            "cwd": "${workspaceFolder}",
+            "program": "Path to executable (xrun or shell script)",
+            "args": "${command:SpecifyArgs}",
+            "problemMatchers": ["ERROR"],
+            "stopOnEntry": true,
+            "noDebug": false
           }
         ],
         "configurationSnippets": [
           {
             "label": "Xrun Debug: Launch",
-            "description": "A new configuration for 'debugging' a user selected SystemVerilog simulation",
+            "description": "A new configuration for debugging a Verilog/SystemVerilog simulation",
             "body": {
               "type": "xrun",
               "request": "launch",
               "name": "Manual",
-              "env": "${workspaceFolder}",
-              "program": "run_sim.sh",
-              "args": "^\"\\${command:AskForArguments}\"",
+              "cwd": "${workspaceFolder}",
+              "program": "xrun",
+              "args": "^\"\\${command:SpecifyArgs}\"",
+              "problemMatchers": ["ERROR"],
               "stopOnEntry": true
             }
           }
         ],
         "variables": {
-          "AskForArguments": "extension.xrun-debug.getRunSimArgs"
+          "SpecifyArgs": "extension.xrun-debug.SpecifyArgs"
         }
       }
     ]

@@ -15,10 +15,10 @@ import * as fs from 'fs';
 import { parse } from 'yaml';
 
 export function activateXrunDebug(context: vscode.ExtensionContext, factory?: vscode.DebugAdapterDescriptorFactory) {
-	context.subscriptions.push(vscode.commands.registerCommand('extension.xrun-debug.getRunSimArgs', config => {
+	context.subscriptions.push(vscode.commands.registerCommand('extension.xrun-debug.SpecifyArgs', config => {
 		return vscode.window.showInputBox({
-			placeHolder: "Please enter all config options for run_sim.sh",
-			value: "-t wfg1"
+			placeHolder: "Please enter debug configuration command line options",
+			value: ""
 		});
 	}));
 

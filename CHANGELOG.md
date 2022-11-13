@@ -24,7 +24,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Step out
 - Watch
 - REPL requests
-- Console keywords highlight on match option in launch configurations
+
+### Changed
+
+- "env" launch configuration option renamed to "cwd".
+- "consoleKeywords" launch configuration option renamed to "problemMatchers".
+- "AskForArguments" configuration provider command renamed to "SpecifyArgs".
+- Extension now activates on SystemVerilog and Verilog language detection.
 
 ### Fixed
 

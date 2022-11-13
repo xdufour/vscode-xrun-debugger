@@ -52,6 +52,7 @@ export function activate(context: vscode.ExtensionContext) {
 			activateXrunDebug(context);
 			break;
 	}
+	console.log("vscode-xrun-debugger is now active!");
 }
 
 export function deactivate() {
