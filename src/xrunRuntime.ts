@@ -424,18 +424,16 @@ export class XrunRuntime extends EventEmitter {
 	 */
 	public async setBreakPoint(path: string, line: number): Promise<IRuntimeBreakpoint | undefined> {		
 		const bp: IRuntimeBreakpoint = { verified: false, line, id: this.breakpointId++ };
-		let bps = this.breakPoints.get(path);
-
 		// xrun format
 		// Line breakpoint: stop -create -file <filepath> -line <line# (not zero aligned)> -all -name <id>
-		/** TODO: Implement conditional breakpoints:
+		/* TODO: Implement conditional breakpoints:
 		 * Hit count: -skip <count>
-		 * Condition: -condition <tcl_expression>	 
-		 */
+		 * Condition: -condition <tcl_expression> */
 		let lines = await this.sendCommandWaitResponse("stop -create -file " + path + " -line " + line + " -all -name " + bp.id);
 		if(lines.length > 0 && lines[0].search(/Created stop/) !== -1){
 			bp.verified = true;
 		}
+		let bps = this.breakPoints.get(path);
 		if (!bps) {
 			bps = new Array<IRuntimeBreakpoint>();
 			this.breakPoints.set(path, bps);
@@ -527,7 +525,7 @@ export class XrunRuntime extends EventEmitter {
 				line = lines.shift();
 				if(line){
 					let _size: number = parseInt(line.substring(line.search('=') + 1).replace(/\s/g, ''));
-					if(_size !== NaN){
+					if(!isNaN(_size)){
 						size = _size;
 					}
 					else{
