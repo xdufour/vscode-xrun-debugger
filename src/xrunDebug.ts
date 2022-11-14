@@ -194,11 +194,6 @@ export class XrunDebugSession extends LoggingDebugSession {
 		response.body.supportsFunctionBreakpoints = true;
 
 		this.sendResponse(response);
-
-		// since this debug adapter can accept configuration requests like 'setBreakpoint' at any time,
-		// we request them early by sending an 'initializeRequest' to the frontend.
-		// The frontend will end the configuration sequence by calling 'configurationDone' request.
-		this.sendEvent(new InitializedEvent());
 	}
 
 	/**
@@ -232,6 +227,8 @@ export class XrunDebugSession extends LoggingDebugSession {
 
 		// start the program in the runtime
 		await this._runtime.start(args.cwd, args.program, args.args, !!args.stopOnEntry, !args.noDebug);
+
+		this.sendEvent(new InitializedEvent());
 
 		// wait 1 second until configuration has finished (and configurationDoneRequest has been called)
 		await this._configurationDone.wait(1000);

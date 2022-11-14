@@ -189,6 +189,7 @@ export class XrunRuntime extends EventEmitter {
 			this._sourceFile = this.cwd + '/' + bp_file_str;
 			this.currentLine = parseInt(bp_line_str) - 1; // Editor lines are zero-based
 			console.log("BREAKPOINT HIT");
+			this.verifyBreakpoint(this._sourceFile, this.currentLine + 1);
 			this.sendEvent(this.stopEventString);
 		}
 		else if(this.stepping && line.search(/(xcelium>\s)?\S+\.(sv|v|vams|vh|svh):\d+\s/) !== -1){
@@ -395,6 +396,20 @@ export class XrunRuntime extends EventEmitter {
 		return this.scopes;
 	}
 
+	private verifyBreakpoint(file: string, line: number){
+		for(let [bp_file, bps] of this.breakPoints.entries()){
+			// Only compare the filename because of possible relative path directory backtracks
+			if(bp_file.substring(bp_file.lastIndexOf('/')) === file.substring(file.lastIndexOf('/'))){
+				for(let bp of bps){
+					if(bp.line == line){
+						bp.verified = true;
+						this.sendEvent('breakpointValidated', bp);
+					}
+				}
+			}
+		}
+	}
+
 	/*
 	 * Determine possible column breakpoint positions for the given line.
 	 * Here we return the start location of words with more than 8 characters.
@@ -408,7 +423,7 @@ export class XrunRuntime extends EventEmitter {
 	 * Set breakpoint in file with given line.
 	 */
 	public async setBreakPoint(path: string, line: number): Promise<IRuntimeBreakpoint | undefined> {		
-		const bp: IRuntimeBreakpoint = { verified: true, line, id: this.breakpointId++ };
+		const bp: IRuntimeBreakpoint = { verified: false, line, id: this.breakpointId++ };
 		let bps = this.breakPoints.get(path);
 
 		// xrun format
@@ -418,17 +433,15 @@ export class XrunRuntime extends EventEmitter {
 		 * Condition: -condition <tcl_expression>	 
 		 */
 		let lines = await this.sendCommandWaitResponse("stop -create -file " + path + " -line " + line + " -all -name " + bp.id);
-		if(lines.length > 0){
-			if(lines[0].search(/Created stop/) !== -1){
-				if (!bps) {
-					bps = new Array<IRuntimeBreakpoint>();
-					this.breakPoints.set(path, bps);
-				}
-				bps.push(bp);
-				return bp;
-			}
+		if(lines.length > 0 && lines[0].search(/Created stop/) !== -1){
+			bp.verified = true;
 		}
-		return undefined;
+		if (!bps) {
+			bps = new Array<IRuntimeBreakpoint>();
+			this.breakPoints.set(path, bps);
+		}
+		bps.push(bp);
+		return bp;
 	}
 
 	public clearBreakpoints(path: string): void {
