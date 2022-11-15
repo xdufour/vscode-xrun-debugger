@@ -395,31 +395,26 @@ export class XrunRuntime extends EventEmitter {
 		return this.scopes;
 	}
 
-	// TODO: Find surefire way to check for breakpoints but make it more reliable
-/* 	private verifyBreakpoint(id: number){
-		for(let [_, bps] of this.breakPoints.entries()){
-			for(let bp of bps){
-				if(bp.id == id){
-					bp.verified = true;
-					this.sendEvent('breakpointValidated', bp);
+	/**
+	 * Get all existing breakpoints.
+	 */
+	public async getBreakpoints(): Promise<number[]> {
+		return this.sendCommandWaitResponse("stop -show").then((lines: string[]) => {
+			var bpIds: number[] = [];
+			for(var l of lines){
+				let m = /^(\d+)\s/.exec(l);
+				if(m){
+					bpIds.push(parseInt(m[1]));
 				}
 			}
-		}
-	} */
-
-	/*
-	 * Determine possible column breakpoint positions for the given line.
-	 * Here we return the start location of words with more than 8 characters.
-	 */
-	public getBreakpoints(path: string, line: number): number[] {
-		//return this.getWords(line, this.getLine(line)).filter(w => w.name.length > 8).map(w => w.index);
-		return [0];
+			return bpIds;
+		});
 	}
 
-	/*
+	/**
 	 * Set breakpoint in file with given line.
 	 */
-	public async setBreakPoint(path: string, line: number): Promise<IRuntimeBreakpoint | undefined> {		
+	public setBreakPoint(path: string, line: number): IRuntimeBreakpoint {		
 		const bp: IRuntimeBreakpoint = { verified: true, line, id: this.breakpointId++ };
 		// xrun format
 		// Line breakpoint: stop -create -file <filepath> -line <line# (not zero aligned)> -all -name <id>

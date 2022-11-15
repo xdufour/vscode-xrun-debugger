@@ -251,41 +251,20 @@ export class XrunDebugSession extends LoggingDebugSession {
 		this._runtime.clearBreakpoints(path);
 
 		// set and verify breakpoint locations
-		const actualBreakpoints0 = clientLines.map(async l => {
-			const runtime_bp = await this._runtime.setBreakPoint(path, l);
-			if(runtime_bp){
-				const bp = new Breakpoint(runtime_bp.verified, runtime_bp.line) as DebugProtocol.Breakpoint;
-				bp.id = runtime_bp.id;
-				return bp;
-			}
-			return undefined;
+		const actualBreakpoints0 = clientLines.map(l => {
+			const runtime_bp = this._runtime.setBreakPoint(path, l);
+			const bp: DebugProtocol.Breakpoint = new Breakpoint(runtime_bp.verified, runtime_bp.line);
+			bp.id = runtime_bp.id;
+			return bp;
 		});
-		const actualBreakpoints = await Promise.all<DebugProtocol.Breakpoint | undefined>(actualBreakpoints0);
+		const validIds = await this._runtime.getBreakpoints();
 
 		// send back the actual breakpoint positions
 		response.body = {
-			breakpoints: actualBreakpoints.filter((bp) => bp) as DebugProtocol.Breakpoint[]
+			breakpoints: actualBreakpoints0.filter((bp) => {
+				return (bp.id && validIds.includes(bp.id));
+			})
 		};
-		this.sendResponse(response);
-	}
-
-	protected breakpointLocationsRequest(response: DebugProtocol.BreakpointLocationsResponse, args: DebugProtocol.BreakpointLocationsArguments, request?: DebugProtocol.Request): void {
-
-		if (args.source.path) {
-			const bps = this._runtime.getBreakpoints(args.source.path, this.convertClientLineToDebugger(args.line));
-			response.body = {
-				breakpoints: bps.map(col => {
-					return {
-						line: args.line,
-						column: this.convertDebuggerColumnToClient(col)
-					};
-				})
-			};
-		} else {
-			response.body = {
-				breakpoints: []
-			};
-		}
 		this.sendResponse(response);
 	}
 
