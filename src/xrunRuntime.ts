@@ -169,7 +169,7 @@ export class XrunRuntime extends EventEmitter {
 			this.ls.kill();
 			this.sendEvent('end');
 		}
-		else if(line.search('Created stop 1:') !== -1){
+		else if(line.search(/Created stop 1:/) !== -1){
 			// TODO: Change to be generic to non-UVM testbenches (and/or that don't include END-OF-BUILD stop)
 			console.log("DETECTED INITIAL STOP");
 			this.sendSimulatorTerminalCommand("run");
@@ -189,7 +189,6 @@ export class XrunRuntime extends EventEmitter {
 			this._sourceFile = this.cwd + '/' + bp_file_str;
 			this.currentLine = parseInt(bp_line_str) - 1; // Editor lines are zero-based
 			console.log("BREAKPOINT HIT");
-			this.verifyBreakpoint(this._sourceFile, this.currentLine + 1);
 			this.sendEvent(this.stopEventString);
 		}
 		else if(this.stepping && line.search(/(xcelium>\s)?\S+\.(sv|v|vams|vh|svh):\d+\s/) !== -1){
@@ -396,19 +395,17 @@ export class XrunRuntime extends EventEmitter {
 		return this.scopes;
 	}
 
-	private verifyBreakpoint(file: string, line: number){
-		for(let [bp_file, bps] of this.breakPoints.entries()){
-			// Only compare the filename because of possible relative path directory backtracks
-			if(bp_file.substring(bp_file.lastIndexOf('/')) === file.substring(file.lastIndexOf('/'))){
-				for(let bp of bps){
-					if(bp.line == line){
-						bp.verified = true;
-						this.sendEvent('breakpointValidated', bp);
-					}
+	// TODO: Find surefire way to check for breakpoints but make it more reliable
+/* 	private verifyBreakpoint(id: number){
+		for(let [_, bps] of this.breakPoints.entries()){
+			for(let bp of bps){
+				if(bp.id == id){
+					bp.verified = true;
+					this.sendEvent('breakpointValidated', bp);
 				}
 			}
 		}
-	}
+	} */
 
 	/*
 	 * Determine possible column breakpoint positions for the given line.
@@ -423,16 +420,14 @@ export class XrunRuntime extends EventEmitter {
 	 * Set breakpoint in file with given line.
 	 */
 	public async setBreakPoint(path: string, line: number): Promise<IRuntimeBreakpoint | undefined> {		
-		const bp: IRuntimeBreakpoint = { verified: false, line, id: this.breakpointId++ };
+		const bp: IRuntimeBreakpoint = { verified: true, line, id: this.breakpointId++ };
 		// xrun format
 		// Line breakpoint: stop -create -file <filepath> -line <line# (not zero aligned)> -all -name <id>
 		/* TODO: Implement conditional breakpoints:
 		 * Hit count: -skip <count>
 		 * Condition: -condition <tcl_expression> */
-		let lines = await this.sendCommandWaitResponse("stop -create -file " + path + " -line " + line + " -all -name " + bp.id);
-		if(lines.length > 0 && lines[0].search(/Created stop/) !== -1){
-			bp.verified = true;
-		}
+		this.sendSimulatorTerminalCommand("stop -create -file " + path + " -line " + line + " -all -name " + bp.id);
+
 		let bps = this.breakPoints.get(path);
 		if (!bps) {
 			bps = new Array<IRuntimeBreakpoint>();

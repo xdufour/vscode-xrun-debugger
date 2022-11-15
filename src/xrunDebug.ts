@@ -158,15 +158,17 @@ export class XrunDebugSession extends LoggingDebugSession {
 		// make VS Code support data breakpoints
 		response.body.supportsDataBreakpoints = true;
 
+		response.body.supportsConditionalBreakpoints = false;
+
 		// make VS Code support completion in REPL
-		response.body.supportsCompletionsRequest = true;
+		response.body.supportsCompletionsRequest = false;
 		response.body.completionTriggerCharacters = [ ".", "[" ];
 
 		// make VS Code send cancel request
 		response.body.supportsCancelRequest = true;
 
 		// make VS Code send the breakpointLocations request
-		response.body.supportsBreakpointLocationsRequest = true;
+		response.body.supportsBreakpointLocationsRequest = false;
 
 		// make VS Code provide "Step in Target" functionality
 		response.body.supportsStepInTargetsRequest = true;
