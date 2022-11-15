@@ -160,6 +160,8 @@ export class XrunDebugSession extends LoggingDebugSession {
 
 		response.body.supportsConditionalBreakpoints = false;
 
+		response.body.supportsHitConditionalBreakpoints = true;
+
 		// make VS Code support completion in REPL
 		response.body.supportsCompletionsRequest = false;
 		response.body.completionTriggerCharacters = [ ".", "[" ];
@@ -243,16 +245,14 @@ export class XrunDebugSession extends LoggingDebugSession {
 	}
 
 	protected async setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): Promise<void> {
-
 		const path = args.source.path as string;
-		const clientLines = args.lines || [];
 
 		// clear all breakpoints for this file
 		this._runtime.clearBreakpoints(path);
 
 		// set and verify breakpoint locations
-		const actualBreakpoints0 = clientLines.map(l => {
-			const runtime_bp = this._runtime.setBreakPoint(path, l);
+		const actualBreakpoints0 = (args.breakpoints || []).map(client_bp => {
+			const runtime_bp = this._runtime.setBreakPoint(path, client_bp.line, client_bp.hitCondition);
 			const bp: DebugProtocol.Breakpoint = new Breakpoint(runtime_bp.verified, runtime_bp.line);
 			bp.id = runtime_bp.id;
 			return bp;

@@ -414,14 +414,17 @@ export class XrunRuntime extends EventEmitter {
 	/**
 	 * Set breakpoint in file with given line.
 	 */
-	public setBreakPoint(path: string, line: number): IRuntimeBreakpoint {		
+	public setBreakPoint(path: string, line: number, hitCountCondition: string | undefined): IRuntimeBreakpoint {		
 		const bp: IRuntimeBreakpoint = { verified: true, line, id: this.breakpointId++ };
 		// xrun format
 		// Line breakpoint: stop -create -file <filepath> -line <line# (not zero aligned)> -all -name <id>
 		/* TODO: Implement conditional breakpoints:
-		 * Hit count: -skip <count>
 		 * Condition: -condition <tcl_expression> */
-		this.sendSimulatorTerminalCommand("stop -create -file " + path + " -line " + line + " -all -name " + bp.id);
+		var cmd: string = `stop -create -file ${path} -line ${line} -all -name ${bp.id}`;
+		if(hitCountCondition){
+			cmd += ` -skip ${hitCountCondition}`;
+		}
+		this.sendSimulatorTerminalCommand(cmd);
 
 		let bps = this.breakPoints.get(path);
 		if (!bps) {
