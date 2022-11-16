@@ -412,17 +412,42 @@ export class XrunRuntime extends EventEmitter {
 	}
 
 	/**
+	 * Format user condition in a best effort to meet tcl expression requirements, or return undefined
+	 */
+	private formatConditionToTcl(expression: string): string | undefined{
+		// m[0]: match; m[1]: name of the evaluated variable; m[2]: =|==|===, m[3]: numerical condition with optional radix
+		const regExp = /^\s*{?\s*([a-z_][a-z0-9_\.\[\]]*)\s*(=|==|===|!=|!==|>|>=|<|<=)\s*((\d*'(b|h|d))?[a-f0-9x]*)\s*}?\s*$/i; 
+		var m = regExp.exec(expression);
+		if(m){
+			// Expression was matched, reconstitute tcl-compliant expression from captured groups
+			var lhs = m[1];
+			var op = m[2];
+			var rhs = m[3];
+			const formattedExp = `{#${lhs} ${op} ${rhs}}`;
+			return formattedExp;
+		}
+		else{
+			// Expression has unrecoverable errors
+			return undefined;
+		}
+	}
+
+	/**
 	 * Set breakpoint in file with given line.
 	 */
-	public setBreakPoint(path: string, line: number, hitCountCondition: string | undefined): IRuntimeBreakpoint {		
+	public setBreakPoint(path: string, line: number, hitCountCondition: string | undefined, condition: string | undefined): IRuntimeBreakpoint {		
 		const bp: IRuntimeBreakpoint = { verified: true, line, id: this.breakpointId++ };
 		// xrun format
 		// Line breakpoint: stop -create -file <filepath> -line <line# (not zero aligned)> -all -name <id>
-		/* TODO: Implement conditional breakpoints:
-		 * Condition: -condition <tcl_expression> */
 		var cmd: string = `stop -create -file ${path} -line ${line} -all -name ${bp.id}`;
 		if(hitCountCondition){
 			cmd += ` -skip ${hitCountCondition}`;
+		}
+		else if(condition){
+			const tcl_expression = this.formatConditionToTcl(condition);
+			if(tcl_expression){
+				cmd += ` -if ${tcl_expression}`;
+			}
 		}
 		this.sendSimulatorTerminalCommand(cmd);
 

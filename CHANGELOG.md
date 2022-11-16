@@ -9,7 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Unreleased
 
-- Conditional breakpoints
 - Logpoints
 - Step in target
 - Target console setting
@@ -18,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added 
 
 - Data breakpoints
-- Hitcount conditional breakpoints
+- Conditional breakpoints
 - Variables for SystemVerilog
 - Step into
 - Step over
