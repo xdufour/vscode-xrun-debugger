@@ -332,63 +332,63 @@ export class XrunRuntime extends EventEmitter {
 	 * Returns the stack trace
 	 */
 	public async stack(startFrame: number, endFrame: number): Promise<IRuntimeStack> {
-
-		let names: string[] = [];
-		let files: string[] = [];
-		let lines: number[] = [];
-		
-		await this.sendCommandWaitResponse("stack");	
-		for(var i = 0; i < this.stdout_data.length; i++){
-			let line = this.stdout_data.shift();
-			if(line){
-				if(line.search(/\d.*\sat\s/) !== -1){
-					let name: string = line.substring(0, line.search(/\sat\s/));
-					let line_idx: number = line.search(/:\d+$/);
-					let line_str: string = line.substring(line_idx + 1);
-					let file_str: string = line.substring(line.search(/\sat\s/) + 4, line_idx);
-					names.push(name);
-					if(file_str.substring(0, 3) == "../") {
-						files.push(this.cwd.substring(0, this.cwd.lastIndexOf('/')) + file_str.substring(2));
+		return this.sendCommandWaitResponse("stack", 5000, true).then((stdout_lines: string[]) => {	
+			let names: string[] = [];
+			let files: string[] = [];
+			let lines: number[] = [];
+			while(stdout_lines.length > 0){
+				let line = stdout_lines.shift();
+				if(line){
+					if(line.search(/\d.*\sat\s/) !== -1){
+						let name: string = line.substring(0, line.search(/\sat\s/));
+						let line_idx: number = line.search(/:\d+$/);
+						let line_str: string = line.substring(line_idx + 1);
+						let file_str: string = line.substring(line.search(/\sat\s/) + 4, line_idx);
+						names.push(name);
+						if(file_str.substring(0, 3) == "../") {
+							files.push(this.cwd.substring(0, this.cwd.lastIndexOf('/')) + file_str.substring(2));
+						}
+						else {
+							files.push(file_str);
+						}
+						lines.push(Number(line_str));
 					}
-					else {
-						files.push(file_str);
-					}
-					lines.push(Number(line_str));
 				}
 			}
-		}
-		const frames: IRuntimeStackFrame[] = [];
-		for (let i = startFrame; i < Math.min(endFrame, names.length); i++) {
+			const frames: IRuntimeStackFrame[] = [];
+			for (let i = startFrame; i < Math.min(endFrame, names.length); i++) {
 
-			const stackFrame: IRuntimeStackFrame = {
-				index: i,
-				name: names[i],	
-				file: files[i],
-				line: lines[i] - 1,
-				column: 0, 
-				instruction: undefined
+				const stackFrame: IRuntimeStackFrame = {
+					index: i,
+					name: names[i],	
+					file: files[i],
+					line: lines[i] - 1,
+					column: 0, 
+					instruction: undefined
+				};
+
+				frames.push(stackFrame);
+			}
+			// Extract scopes from the topmost stack frame
+			var scopes: string[] = [];
+			if(names.length) {
+				let fullscope: string = names[0].substring(names[0].lastIndexOf(' ') + 1);
+				var regExp = /\./g;
+				do {
+					var m = regExp.exec(fullscope);
+					if(m){
+						scopes.push(fullscope.substring(0, m.index));
+					}
+				} while(m);
+				scopes.push(fullscope);
+			}
+			this.scopes = scopes;
+
+			return {
+				frames: frames,
+				count: names.length
 			};
-
-			frames.push(stackFrame);
-		}
-		// Extract scopes from the topmost stack frame
-		this.scopes = [];
-		if(names.length) {
-			let fullscope: string = names[0].substring(names[0].lastIndexOf(' ') + 1);
-			var regExp = /\./g;
-			do {
-				var m = regExp.exec(fullscope);
-				if(m){
-					this.scopes.push(fullscope.substring(0, m.index));
-				}
-			} while(m);
-			this.scopes.push(fullscope);
-		}
-
-		return {
-			frames: frames,
-			count: names.length
-		};
+		});
 	}
 
 	public getScopes(): string[]{
