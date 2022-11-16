@@ -173,6 +173,7 @@ export class XrunRuntime extends EventEmitter {
 			// TODO: Change to be generic to non-UVM testbenches (and/or that don't include END-OF-BUILD stop)
 			console.log("DETECTED INITIAL STOP");
 			this.sendSimulatorTerminalCommand("run");
+			this.stopHit = true;
 		}
 		else if(line.search(/\(stop\s(\d+|[a-z_][a-z0-9_\[\]\.]*):/) !== -1){
 			if(line.search(/\(stop\s\d+/) !== -1)
@@ -208,10 +209,7 @@ export class XrunRuntime extends EventEmitter {
 			this.sendEvent('stopOnStep');
 		}
 		else if(line.search(/End-of-build$/) !== -1){
-			if(this.stopOnEntry){
-				this.sendEvent('stopOnBreakpoint');
-			}
-			else{
+			if(!this.stopOnEntry){
 				this.sendSimulatorTerminalCommand("run");
 			}
 			this.launch_done.notify();
@@ -415,6 +413,7 @@ export class XrunRuntime extends EventEmitter {
 	 * Format user condition in a best effort to meet tcl expression requirements, or return undefined
 	 */
 	private formatConditionToTcl(expression: string): string | undefined{
+		// TODO: Allow a string expression condition (if supported by xrun)
 		// m[0]: match; m[1]: name of the evaluated variable; m[2]: =|==|===, m[3]: numerical condition with optional radix
 		const regExp = /^\s*{?\s*([a-z_][a-z0-9_\.\[\]]*)\s*(=|==|===|!=|!==|>|>=|<|<=)\s*((\d*'(b|h|d))?[a-f0-9x]*)\s*}?\s*$/i; 
 		var m = regExp.exec(expression);
