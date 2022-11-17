@@ -77,6 +77,8 @@ export class XrunRuntime extends EventEmitter {
 	private cwd: string = '';
 	private stopOnEntry: boolean = true;
 
+	private cmd_delimiter: string = "end_cmd_semaphore";
+
 	private stdout_data: string[] = [];
 
 	private launch_done = new Subject();
@@ -129,7 +131,7 @@ export class XrunRuntime extends EventEmitter {
 			for(var line of lines){
 				// This allows us to pinpoint the end of our desired output if it is large enough that it may not appear all in the same listener call
 				// TODO: Benchmark the performance cost of having the endcmd flag always on for safety vs the "smart tradeoff" way
-				if(this.largeExpectedOutput && line.includes('endcmd5443')){ 
+				if(this.largeExpectedOutput && line.includes(this.cmd_delimiter)){ 
 					this.pending_data.notify();
 					break;
 				}
@@ -165,7 +167,8 @@ export class XrunRuntime extends EventEmitter {
 		if(line.search(/\$finish;/) !== -1){
 			this.sendSimulatorTerminalCommand("exit");
 		}
-		else if(line.search('./run_sim.sh') !== -1){ // FIXME: Remove hardcoded way of detecting end of execution
+		else if(line.search('./run_sim.sh') !== -1){
+			// FIXME: Remove hardcoded way of detecting end of execution
 			this.ls.kill();
 			this.sendEvent('end');
 		}
@@ -413,9 +416,8 @@ export class XrunRuntime extends EventEmitter {
 	 * Format user condition in a best effort to meet tcl expression requirements, or return undefined
 	 */
 	private formatConditionToTcl(expression: string): string | undefined{
-		// TODO: Allow a string expression condition (if supported by xrun)
-		// m[0]: match; m[1]: name of the evaluated variable; m[2]: =|==|===, m[3]: numerical condition with optional radix
-		const regExp = /^\s*{?\s*([a-z_][a-z0-9_\.\[\]]*)\s*(=|==|===|!=|!==|>|>=|<|<=)\s*((\d*'(b|h|d))?[a-f0-9x]*)\s*}?\s*$/i; 
+		// m[0]: match; m[1]: name of the evaluated variable; m[2]: comparison operator, m[3]: numerical condition with optional radix
+		const regExp = /^\s*{?\s*#?([a-z_][a-z0-9_\.\[\]]*)\s*(=|==|===|!=|!==|>|>=|<|<=)\s*((\d*'(b|h|d))?[a-f0-9x]*|"[^"]*")\s*}?\s*$/i; 
 		var m = regExp.exec(expression);
 		if(m){
 			// Expression was matched, reconstitute tcl-compliant expression from captured groups
@@ -693,7 +695,7 @@ export class XrunRuntime extends EventEmitter {
 		this.sendSimulatorTerminalCommand(cmd);
 		this.largeExpectedOutput = expensive;
 		if(expensive)
-			this.sendSimulatorTerminalCommand('puts endcmd5443', true);
+			this.sendSimulatorTerminalCommand(`puts ${this.cmd_delimiter}`, true);
 		await this.pending_data.wait(timeout);
 		this.sendOutputToClient = true;
 		return this.stdout_data;
