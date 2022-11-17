@@ -261,8 +261,9 @@ export class XrunDebugSession extends LoggingDebugSession {
 
 		// send back the actual breakpoint positions
 		response.body = {
-			breakpoints: actualBreakpoints0.filter((bp) => {
-				return (bp.id && validIds.includes(bp.id));
+			breakpoints: actualBreakpoints0.map(bp => {
+				bp.verified = validIds.includes(bp.id || 0);
+				return bp;
 			})
 		};
 		this.sendResponse(response);

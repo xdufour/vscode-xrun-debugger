@@ -449,6 +449,9 @@ export class XrunRuntime extends EventEmitter {
 			if(tcl_expression){
 				cmd += ` -if ${tcl_expression}`;
 			}
+			else{
+				return bp;
+			}
 		}
 		this.sendSimulatorTerminalCommand(cmd);
 
