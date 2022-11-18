@@ -16,7 +16,7 @@ import {
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { basename } from 'path-browserify';
-import { XrunRuntime, IRuntimeBreakpoint, FileAccessor, RuntimeVariable } from './xrunRuntime';
+import { XrunRuntime, FileAccessor, RuntimeVariable } from './xrunRuntime';
 import { Subject } from 'await-notify';
 import { LogLevel } from '@vscode/debugadapter/lib/logger';
 import async = require('async');
@@ -96,8 +96,8 @@ export class XrunDebugSession extends LoggingDebugSession {
 				this.sendEvent(new StoppedEvent('exception', XrunDebugSession.threadID));
 			}
 		});
-		this._runtime.on('breakpointValidated', (bp: IRuntimeBreakpoint) => {
-			this.sendEvent(new BreakpointEvent('changed', { verified: bp.verified, id: bp.id } as DebugProtocol.Breakpoint));
+		this._runtime.on('breakpointValidated', (bp_id: number) => {
+			this.sendEvent(new BreakpointEvent('changed', { verified: true, id: bp_id } as DebugProtocol.Breakpoint));
 		});
 		this._runtime.on('output', (type, text: string, filePath, line, column) => {
 			let category: string;
@@ -251,20 +251,19 @@ export class XrunDebugSession extends LoggingDebugSession {
 		this._runtime.clearBreakpoints(path);
 
 		// set and verify breakpoint locations
-		const actualBreakpoints0 = (args.breakpoints || []).map(client_bp => {
-			const runtime_bp = this._runtime.setBreakPoint(path, client_bp.line, client_bp.hitCondition, client_bp.condition);
-			const bp: DebugProtocol.Breakpoint = new Breakpoint(runtime_bp.verified, runtime_bp.line);
-			bp.id = runtime_bp.id;
-			return bp;
+		const actualBreakpoints0 = (args.breakpoints || []).map(async client_bp => {
+			return this._runtime.setBreakPoint(path, client_bp.line, client_bp.hitCondition, client_bp.condition).then((runtime_bp) => {
+				const bp: DebugProtocol.Breakpoint = new Breakpoint(runtime_bp.verified, runtime_bp.line);
+				bp.id = runtime_bp.id;
+				return bp;
+			});
 		});
-		const validIds = await this._runtime.getBreakpoints();
+
+		const actualBreakpoints = await Promise.all<DebugProtocol.Breakpoint>(actualBreakpoints0);
 
 		// send back the actual breakpoint positions
 		response.body = {
-			breakpoints: actualBreakpoints0.map(bp => {
-				bp.verified = validIds.includes(bp.id || 0);
-				return bp;
-			})
+			breakpoints: actualBreakpoints
 		};
 		this.sendResponse(response);
 	}
