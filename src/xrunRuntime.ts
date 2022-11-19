@@ -55,14 +55,6 @@ export class RuntimeVariable {
 	constructor(public readonly name: string, private _value: string, public readonly type: string, public size?: number) {}
 }
 
-class PendingAwaitNotify {
-	// Create object here, which stores promise or callback
-	// So that the messageQueue
-	public subject = new Subject();
-
-	constructor() {}
-}
-
 export function timeout(ms: number) {
 	return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -90,7 +82,7 @@ export class XrunRuntime extends EventEmitter {
 	private sendOutputToClient: boolean = true;
 	private largeExpectedOutput: boolean = false;
 
-	private breakpointNotifyMap = new Map<number, PendingAwaitNotify>();
+	private breakpointNotifyMap = new Map<number, Subject>();
 
 	private scopes: string[] = [];
 
@@ -186,7 +178,8 @@ export class XrunRuntime extends EventEmitter {
 			let pan = this.breakpointNotifyMap.get(bp_id);
 			if(pan){
 				console.log(`Caught creation of stop ${bp_id}`);
-				pan.subject.notify();
+				pan.notify();
+				this.sendEvent('breakpointValidated', bp_id);
 			}
 		}
 		else if(line.search(/\(stop\s(\d+|[a-z_][a-z0-9_\[\]\.]*):/) !== -1){
@@ -443,17 +436,18 @@ export class XrunRuntime extends EventEmitter {
 		}
 		bps.push(bp);
 
-		this.sendSimulatorTerminalCommand(cmd);
-
-		const subject = new PendingAwaitNotify();
-		this.breakpointNotifyMap.set(bp.id, subject);
-		return await subject.subject.wait(5000)
+		this.breakpointNotifyMap.set(bp.id, new Subject());
+		const promise = await this.breakpointNotifyMap.get(bp.id).wait(5000)
 			.then((notTimeout: boolean) => {
 				bp.verified = notTimeout;
-				if(!notTimeout)
+				if(notTimeout === false)
 					console.error(`Unable to verify breakpoint ${bp.id}`);
 				return bp;
 		});
+
+		this.sendSimulatorTerminalCommand(cmd);
+
+		return promise;
 	}
 
 	public clearBreakpoints(path: string): void {
