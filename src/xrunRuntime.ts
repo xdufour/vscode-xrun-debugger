@@ -1,5 +1,10 @@
 /*---------------------------------------------------------
- * Copyright (C) Microsoft Corporation. All rights reserved.
+ * xrunRuntime.ts
+ * TODO:
+ * - Logpoints
+ * - Step in target
+ * - Target console setting
+ * - UVM configurations settings (log level, xrun arguments, etc.)
  *--------------------------------------------------------*/
 
 import { EventEmitter } from 'events';
