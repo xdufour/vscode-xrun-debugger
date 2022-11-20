@@ -1,7 +1,7 @@
 {
   "name": "xrun-debug",
   "displayName": "Xrun Debug",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "boreas-technologies",
   "description": "Debug support for Verilog/SystemVerilog Xcelium simulations",
   "author": {

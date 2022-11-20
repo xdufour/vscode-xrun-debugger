@@ -21,7 +21,7 @@ Open VS Code and press `F1` or `Ctrl + Shift + P` to open command palette, selec
 
 Or launch VS Code Quick Open (`Ctrl + P`), paste the following command, and press enter.
 ```bash
-ext install java-debug
+ext install boreas-technologies.xrun-debug
 ```
 
 ## Use
