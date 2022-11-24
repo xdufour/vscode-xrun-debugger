@@ -57,7 +57,7 @@ export function activateXrunDebug(context: vscode.ExtensionContext, factory?: vs
 
 				let expression:string = line.substring(startIndex, m.index + m[0].length);
 				if(expression.search(/\[.*\]/) !== -1){
-					// FIXME: This eventually could query for the full array (will need to be done from within the DAP/runtime to provide array view)
+					// TODO: Possibly change the single-member query to just show the whole array like when you hover the array variable name
 					expression = expression.replace(/\[.*\]/, '[0]');
 				}
 
@@ -97,6 +97,16 @@ export function activateXrunDebug(context: vscode.ExtensionContext, factory?: vs
 			return allValues;
 		}
 	}));
+
+	// TODO: Implement setting for terminal choice, most probably not here
+	/*const writeEmitter = new vscode.EventEmitter<string>();
+	const pty: vscode.Pseudoterminal = {
+		onDidWrite: writeEmitter.event,
+		open: () => {},
+		close: () => {},
+		handleInput: data => writeEmitter.fire(data === '\r' ? '\r\n' : data)
+	};
+	vscode.window.createTerminal({ name: 'Xrun Debug', iconPath:{id:"debug-console"},pty });*/
 }
 
 class XrunConfigurationProvider implements vscode.DebugConfigurationProvider {

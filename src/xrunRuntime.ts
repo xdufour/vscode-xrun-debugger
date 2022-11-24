@@ -171,11 +171,10 @@ export class XrunRuntime extends EventEmitter {
 	messageQueue = async.queue((line: string, completed) => {
 		if(line.search(/\$finish;/) !== -1){
 			this.sendSimulatorTerminalCommand("exit");
-		}
-		else if(line.search('./run_sim.sh') !== -1){
-			// FIXME: Remove hardcoded way of detecting end of execution
-			this.ls.kill();
-			this.sendEvent('end');
+			setTimeout(() => {
+				this.ls.kill();
+				this.sendEvent('end');
+			}, 250);
 		}
 		else if(line.search(/Created stop 1:/) !== -1){
 			// TODO: Change to be generic to non-UVM testbenches (and/or that don't include END-OF-BUILD stop)
