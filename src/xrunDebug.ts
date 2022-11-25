@@ -244,7 +244,7 @@ export class XrunDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
-	protected async setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): Promise<void> {
+	protected async setBreakpointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): Promise<void> {
 		const path = args.source.path as string;
 
 		// clear all breakpoints for this file
@@ -252,7 +252,7 @@ export class XrunDebugSession extends LoggingDebugSession {
 
 		// set and verify breakpoint locations
 		const actualBreakpoints0 = (args.breakpoints || []).map(client_bp => {
-			const runtime_bp = this._runtime.setBreakPoint(path, client_bp.line, client_bp.hitCondition, client_bp.condition);
+			const runtime_bp = this._runtime.setBreakpoint(path, client_bp.line, client_bp.hitCondition, client_bp.condition);
 			const bp: DebugProtocol.Breakpoint = new Breakpoint(runtime_bp.verified, runtime_bp.line);
 			bp.id = runtime_bp.id;
 			return bp;

@@ -112,7 +112,7 @@ export class XrunRuntime extends EventEmitter {
 	public instruction= 0;
 
 	// maps from sourceFile to array of IRuntimeBreakpoint
-	private breakPoints = new Map<string, IRuntimeBreakpoint[]>();
+	private breakpoints = new Map<string, IRuntimeBreakpoint[]>();
 	private dataBreakpoints = new Array<string>();
 
 	// since we want to send breakpoint events, we will assign an id to every event
@@ -440,7 +440,7 @@ export class XrunRuntime extends EventEmitter {
 	/**
 	 * Set breakpoint in file with given line.
 	 */
-	public setBreakPoint(path: string, line: number, hitCountCondition: string | undefined, condition: string | undefined): IRuntimeBreakpoint {		
+	public setBreakpoint(path: string, line: number, hitCountCondition: string | undefined, condition: string | undefined): IRuntimeBreakpoint {		
 		const bp: IRuntimeBreakpoint = { verified: true, line, id: this.breakpointId++ };
 		// xrun format
 		// Line breakpoint: stop -create -file <filepath> -line <line# (not zero aligned)> -all -name <id>
@@ -456,23 +456,21 @@ export class XrunRuntime extends EventEmitter {
 		}
 		this.sendSimulatorTerminalCommand(cmd);
 
-		let bps = this.breakPoints.get(path);
+		let bps = this.breakpoints.get(path);
 		if (!bps) {
 			bps = new Array<IRuntimeBreakpoint>();
-			this.breakPoints.set(path, bps);
+			this.breakpoints.set(path, bps);
 		}
 		bps.push(bp);
 		return bp;
 	}
 
 	public clearBreakpoints(path: string): void {
-		const bps = this.breakPoints.get(path);
+		const bps = this.breakpoints.get(path);
 		if(bps){
-			bps.forEach(bp => {
-				this.sendSimulatorTerminalCommand("stop -delete " + bp.id);
-			});
+			this.sendSimulatorTerminalCommand("stop -delete " + bps.map((bp) => { return bp.id.toString(); }).join(' '));
 		}
-		this.breakPoints.delete(path);
+		this.breakpoints.delete(path);
 	}
 
 	public async setDataBreakpoint(varName: string): Promise<boolean> {
@@ -659,6 +657,7 @@ export class XrunRuntime extends EventEmitter {
 	}
 
 	public setVariable(name: string, value: string){
+		// FIXME: xrun returns error, find why
 		this.sendSimulatorTerminalCommand('deposit ' + name + ' = #' + value + ' -after 0 -relative');
 	}
 
