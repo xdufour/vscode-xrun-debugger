@@ -403,7 +403,7 @@ export class XrunRuntime extends EventEmitter {
 	/**
 	 * Get all existing breakpoints.
 	 */
-	public async getBreakpoints(): Promise<number[]> {
+	public async showBreakpoints(): Promise<number[]> {
 		return this.sendCommandWaitResponse("stop -show").then((lines: string[]) => {
 			var bpIds: number[] = [];
 			for(var l of lines){
@@ -440,7 +440,7 @@ export class XrunRuntime extends EventEmitter {
 	/**
 	 * Set breakpoint in file with given line.
 	 */
-	public setBreakPoint(path: string, line: number, hitCountCondition: string | undefined, condition: string | undefined): IRuntimeBreakpoint {		
+	public setBreakpoint(path: string, line: number, hitCountCondition: string | undefined, condition: string | undefined): IRuntimeBreakpoint {		
 		const bp: IRuntimeBreakpoint = { verified: true, line, id: this.breakpointId++ };
 		// xrun format
 		// Line breakpoint: stop -create -file <filepath> -line <line# (not zero aligned)> -all -name <id>
@@ -469,10 +469,23 @@ export class XrunRuntime extends EventEmitter {
 		const bps = this.breakPoints.get(path);
 		if(bps){
 			bps.forEach(bp => {
-				this.sendSimulatorTerminalCommand("stop -delete " + bp.id);
+				this.clearBreakpoint(bp);
 			});
 		}
 		this.breakPoints.delete(path);
+	}
+
+	public clearBreakpoint(bp: IRuntimeBreakpoint) {
+		this.sendSimulatorTerminalCommand("stop -delete " + bp.id);
+		for(let [_, bps] of this.breakPoints.entries()){
+			bps = bps.filter((_bp) => { 
+				return _bp.id !== bp.id
+			});
+		}
+	}
+
+	public getBreakpoints(path: string): IRuntimeBreakpoint[] {
+		return this.breakPoints.get(path) || [];
 	}
 
 	public async setDataBreakpoint(varName: string): Promise<boolean> {
