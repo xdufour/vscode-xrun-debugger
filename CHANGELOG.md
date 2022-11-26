@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## 0.1.1 - 2022-11-20
 
+### Changed
+
+- "args" launch configuration option now supports array of strings, and YAML files require the dictionary key leading to the target list to be specified in a `file.yml:key` format.
+
 ### Fixed
 
 - Removed typos in README.md

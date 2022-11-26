@@ -32,7 +32,9 @@ interface ILaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
 	cwd: string;
 	/** Absolute path to executable, or relative path if 'cwd' is specified. */
 	program: string;
-	/** ommand line arguments. Can optionally be a path to a yml file to parse for arguments selection to be displayed, or use \"${command:SpecifyArgs}\" to manually enter them upon launch. */
+	/** Command line arguments, defined as a string or array or strings to be space separated. 
+	 * Can optionally be a path to a yml file with the format _file.yml:dict_key_ to parse for arguments 
+	 * selection to be displayed, or use \"${command:SpecifyArgs}\" to manually enter them upon launch. */
 	args: string;
 	/** Lines that match against these keywords in the output console will be sent to stderr. */
 	problemMatchers: string[];
@@ -244,7 +246,7 @@ export class XrunDebugSession extends LoggingDebugSession {
 		this.sendResponse(response);
 	}
 
-	protected async setBreakpointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): Promise<void> {
+	protected async setBreakPointsRequest(response: DebugProtocol.SetBreakpointsResponse, args: DebugProtocol.SetBreakpointsArguments): Promise<void> {
 		const path = args.source.path as string;
 
 		// clear all breakpoints for this file

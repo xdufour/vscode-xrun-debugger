@@ -116,18 +116,27 @@ class XrunConfigurationProvider implements vscode.DebugConfigurationProvider {
 	 * e.g. add all missing attributes to the debug configuration.
 	 */
 	async resolveDebugConfiguration(folder: WorkspaceFolder | undefined, config: DebugConfiguration, token?: CancellationToken): Promise<vscode.DebugConfiguration | null | undefined> {
-
-		// if launch.json is missing or empty
-		if (config.args && config.args.search(/.*\.yml$/) !== -1) {
-			let test = await vscode.window.showQuickPick(
-				Object.keys(parse(fs.readFileSync(config.cwd + '/' + config.args, 'utf-8'))["tests"]), // TODO: Change when args will allow args in string array
-				{
-					canPickMany: false
+		if (config.args){
+			if(Array.isArray(config.args)){
+				config.args = config.args.join(' ');
+			}
+			const regExp = /(^|\s)(([^\s]*\.yml):([^\s]*))($|\s)/;
+			var m = regExp.exec(config.args);
+			if(m) {
+				var yamlFile = m[3];
+				var key = m[4];
+				let arg = await vscode.window.showQuickPick(
+					Object.keys(parse(fs.readFileSync(config.cwd + '/' + yamlFile, 'utf-8'))[key]),
+					{
+						canPickMany: false
+					}
+				).then((str) => {
+					return Promise.resolve(str);
+				});
+				if(arg){
+					config.args = config.args.replace(m[2], arg);
 				}
-			).then((testName) => {
-				return Promise.resolve(testName);
-			});
-			config.args = "-t " + test;
+			}
 		}
 
 		if (!config.program) {

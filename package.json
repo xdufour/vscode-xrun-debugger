@@ -105,8 +105,8 @@
                 "default": "xrun"
               },
               "args": {
-                "type": "string",
-                "description": "Command line arguments. Can optionally be a path to a yml file to parse for arguments selection to be displayed, or use \"${command:SpecifyArgs}\" to manually enter them upon launch.",
+                "type": ["array", "string"],
+                "description": "Command line arguments, defined as a string or array or strings to be space separated. Can optionally be a path to a yml file with the format 'file.yml:dict_key' with a list for arguments selection to be displayed, or use \"${command:SpecifyArgs}\" to manually enter them upon launch.",
                 "default": ""
               },
               "problemMatchers": {
