@@ -109,11 +109,13 @@ export class XrunRuntime extends EventEmitter {
 	private breakpointId = 1;
 
 	ls = require("child_process").spawn("/bin/sh", {
-		shell: false,
+		shell: false
 	});
 
 	readline = require("readline"); 
-	readline_interface = this.readline.createInterface({ input: this.ls.stdout });
+	readline_interface = this.readline.createInterface({ 
+		input: this.ls.stdout
+	});
 
 	constructor() {
 		super();
@@ -155,6 +157,10 @@ export class XrunRuntime extends EventEmitter {
 		this.ls.on("close", (code: any) => {
 			console.log(`child process exited with code ${code}`);
 		});
+
+		this.messageQueue.drain(() => {
+			console.error('No more lines in the messageQueue');
+		})
 	}
 
 	messageQueue = async.queue((line: string, completed) => {
@@ -176,6 +182,7 @@ export class XrunRuntime extends EventEmitter {
 		else if(regExp = /Created stop (\d+)/.exec(line)){
 			let bp_id = parseInt(regExp[1]);
 			this.runtime.emit('stopCreated', bp_id);
+			console.log(line);
 			console.log(`Caught creation of stop ${bp_id}`);
 		}
 		else if(line.search(/\(stop\s(\d+|[a-z_][a-z0-9_\[\]\.]*):/) !== -1){
@@ -226,7 +233,6 @@ export class XrunRuntime extends EventEmitter {
 
 		completed(null);
 	}, 1);
-
 
 	/**
 	 * Start executing the given program.
@@ -438,10 +444,12 @@ export class XrunRuntime extends EventEmitter {
 					bp.verified = true;
 					console.log('Verified breakpoint ' + bp.id);
 					this.runtime.removeListener('stopCreated', cb);
+					console.log('listener removed, count: ' + this.runtime.listenerCount('stopCreated'));
 					resolve(bp);
 				}
 			});
 			this.runtime.on('stopCreated', cb);
+			console.log('listener added, count: ' + this.runtime.listenerCount('stopCreated'));
 		});
 
 		const timeout = new Promise<IRuntimeBreakpoint>((resolve, reject) => {
