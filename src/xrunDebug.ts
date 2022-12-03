@@ -255,6 +255,7 @@ export class XrunDebugSession extends LoggingDebugSession {
 			return this._runtime.setBreakPoint(path, client_bp.line, client_bp.hitCondition, client_bp.condition).then((runtime_bp) => {
 				const bp: DebugProtocol.Breakpoint = new Breakpoint(runtime_bp.verified, runtime_bp.line);
 				bp.id = runtime_bp.id;
+				console.log(`Created breakpoint ${bp.id}, verified: ${bp.verified}`);
 				return bp;
 			});
 		});

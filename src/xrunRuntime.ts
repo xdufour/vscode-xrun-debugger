@@ -6,7 +6,7 @@ import { EventEmitter } from 'events';
 import { Subject } from 'await-notify';
 import fs = require('fs');
 import async = require('async');
-import { setTimeout } from 'timers';
+import { clearTimeout, setTimeout } from 'timers';
 
 export interface FileAccessor {
 	isWindows: boolean;
@@ -82,7 +82,7 @@ export class XrunRuntime extends EventEmitter {
 	private sendOutputToClient: boolean = true;
 	private largeExpectedOutput: boolean = false;
 
-	private breakpointNotifyMap = new Map<number, Subject>();
+	private runtime = new EventEmitter();
 
 	private scopes: string[] = [];
 
@@ -175,12 +175,8 @@ export class XrunRuntime extends EventEmitter {
 		}
 		else if(regExp = /Created stop (\d+)/.exec(line)){
 			let bp_id = parseInt(regExp[1]);
-			let pan = this.breakpointNotifyMap.get(bp_id);
-			if(pan){
-				console.log(`Caught creation of stop ${bp_id}`);
-				pan.notify();
-				this.sendEvent('breakpointValidated', bp_id);
-			}
+			this.runtime.emit('stopCreated', bp_id);
+			console.log(`Caught creation of stop ${bp_id}`);
 		}
 		else if(line.search(/\(stop\s(\d+|[a-z_][a-z0-9_\[\]\.]*):/) !== -1){
 			if(line.search(/\(stop\s\d+/) !== -1)
@@ -436,18 +432,34 @@ export class XrunRuntime extends EventEmitter {
 		}
 		bps.push(bp);
 
-		this.breakpointNotifyMap.set(bp.id, new Subject());
-		const promise = await this.breakpointNotifyMap.get(bp.id).wait(5000)
-			.then((notTimeout: boolean) => {
-				bp.verified = notTimeout;
-				if(notTimeout === false)
-					console.error(`Unable to verify breakpoint ${bp.id}`);
-				return bp;
+		const verified = new Promise<IRuntimeBreakpoint>((resolve, reject) => {
+			const cb = ((id: number) => {
+				if(bp.id == id){
+					bp.verified = true;
+					console.log('Verified breakpoint ' + bp.id);
+					this.runtime.removeListener('stopCreated', cb);
+					resolve(bp);
+				}
+			});
+			this.runtime.on('stopCreated', cb);
+		});
+
+		const timeout = new Promise<IRuntimeBreakpoint>((resolve, reject) => {
+			let wait = setTimeout(() => {
+				clearTimeout(wait);
+				console.log('Timed out verifying breakpoint');
+				resolve(bp);
+			}, 5000);
 		});
 
 		this.sendSimulatorTerminalCommand(cmd);
 
-		return promise;
+		return Promise.race([
+			verified,
+			timeout
+		]).then(() => {
+			return bp;
+		});
 	}
 
 	public clearBreakpoints(path: string): void {
