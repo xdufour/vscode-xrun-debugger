@@ -64,7 +64,8 @@
   "activationEvents": [
     "onLanguage:systemverilog",
     "onLanguage:verilog",
-    "onCommand:extension.xrun-debug.SpecifyArgs"
+    "onCommand:extension.xrun-debug.SpecifyArgs",
+    "onDebug"
   ],
   "workspaceTrust": {
     "request": "never"
