@@ -16,7 +16,7 @@ import {
 } from '@vscode/debugadapter';
 import { DebugProtocol } from '@vscode/debugprotocol';
 import { basename } from 'path-browserify';
-import { XrunRuntime, IRuntimeBreakpoint, FileAccessor, RuntimeVariable } from './xrunRuntime';
+import { XrunRuntime, FileAccessor, RuntimeVariable } from './xrunRuntime';
 import { Subject } from 'await-notify';
 import { LogLevel } from '@vscode/debugadapter/lib/logger';
 import async = require('async');
@@ -98,8 +98,8 @@ export class XrunDebugSession extends LoggingDebugSession {
 				this.sendEvent(new StoppedEvent('exception', XrunDebugSession.threadID));
 			}
 		});
-		this._runtime.on('breakpointValidated', (bp: IRuntimeBreakpoint) => {
-			this.sendEvent(new BreakpointEvent('changed', { verified: bp.verified, id: bp.id } as DebugProtocol.Breakpoint));
+		this._runtime.on('breakpointValidated', (bp_id: number) => {
+			this.sendEvent(new BreakpointEvent('changed', { verified: true, id: bp_id } as DebugProtocol.Breakpoint));
 		});
 		this._runtime.on('output', (type, text: string, filePath, line, column) => {
 			let category: string;
@@ -235,7 +235,8 @@ export class XrunDebugSession extends LoggingDebugSession {
 		await this._runtime.start(args.cwd, args.program, args.args, !!args.stopOnEntry, !args.noDebug);
 
 		this.sendEvent(new InitializedEvent());
-
+		
+		// FIXME: Properly wait until launch is done before resuming configuration (breakpoints etc).
 		// wait 1 second until configuration has finished (and configurationDoneRequest has been called)
 		await this._configurationDone.wait(1000);
 
@@ -253,19 +254,25 @@ export class XrunDebugSession extends LoggingDebugSession {
 		this._runtime.clearBreakpoints(path);
 
 		// set and verify breakpoint locations
-		const actualBreakpoints0 = (args.breakpoints || []).map(client_bp => {
-			const runtime_bp = this._runtime.setBreakpoint(path, client_bp.line, client_bp.hitCondition, client_bp.condition);
-			const bp: DebugProtocol.Breakpoint = new Breakpoint(runtime_bp.verified, runtime_bp.line);
-			bp.id = runtime_bp.id;
-			return bp;
+		const actualBreakpoints0 = (args.breakpoints || []).map(async client_bp => {
+			return this._runtime.setBreakPoint(path, client_bp.line, client_bp.hitCondition, client_bp.condition).then((runtime_bp) => {
+				const bp: DebugProtocol.Breakpoint = new Breakpoint(runtime_bp.verified, runtime_bp.line);
+				bp.id = runtime_bp.id;
+				console.log(`Created breakpoint ${bp.id}, verified: ${bp.verified}`);
+				return bp;
+			});
 		});
-		const validIds = await this._runtime.getBreakpoints();
+
+		// force runtime process to dump stdout buffer to guarantee all breakpoints are obtained
+		setTimeout(() => {
+			this._runtime.forceOutputFlush();
+		}, 200);
+
+		const actualBreakpoints = await Promise.all<DebugProtocol.Breakpoint>(actualBreakpoints0);
 
 		// send back the actual breakpoint positions
 		response.body = {
-			breakpoints: actualBreakpoints0.filter((bp) => {
-				return (bp.id && validIds.includes(bp.id));
-			})
+			breakpoints: actualBreakpoints
 		};
 		this.sendResponse(response);
 	}

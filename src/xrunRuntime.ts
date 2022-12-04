@@ -11,6 +11,7 @@ import { EventEmitter } from 'events';
 import { Subject } from 'await-notify';
 import fs = require('fs');
 import async = require('async');
+import { clearTimeout, setTimeout } from 'timers';
 
 export interface FileAccessor {
 	isWindows: boolean;
@@ -59,12 +60,6 @@ export class RuntimeVariable {
 	constructor(public readonly name: string, private _value: string, public readonly type: string, public size?: number) {}
 }
 
-interface Word {
-	name: string;
-	line: number;
-	index: number;
-}
-
 export function timeout(ms: number) {
 	return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -92,8 +87,7 @@ export class XrunRuntime extends EventEmitter {
 	private sendOutputToClient: boolean = true;
 	private largeExpectedOutput: boolean = false;
 
-	// the contents (= lines) of the one and only file
-	private sourceLines: string[] = [];
+	private runtime = new EventEmitter();
 
 	private scopes: string[] = [];
 
@@ -120,11 +114,13 @@ export class XrunRuntime extends EventEmitter {
 	private breakpointId = 1;
 
 	ls = require("child_process").spawn("/bin/sh", {
-		shell: false,
+		shell: false
 	});
 
 	readline = require("readline"); 
-	readline_interface = this.readline.createInterface({ input: this.ls.stdout });
+	readline_interface = this.readline.createInterface({ 
+		input: this.ls.stdout
+	});
 
 	constructor() {
 		super();
@@ -166,9 +162,14 @@ export class XrunRuntime extends EventEmitter {
 		this.ls.on("close", (code: any) => {
 			console.log(`child process exited with code ${code}`);
 		});
+
+		this.messageQueue.drain(() => {
+			console.error('No more lines in the messageQueue');
+		})
 	}
 
 	messageQueue = async.queue((line: string, completed) => {
+		var regExp;
 		if(line.search(/\$finish;/) !== -1){
 			this.sendSimulatorTerminalCommand("exit");
 			setTimeout(() => {
@@ -181,6 +182,12 @@ export class XrunRuntime extends EventEmitter {
 			console.log("DETECTED INITIAL STOP");
 			this.sendSimulatorTerminalCommand("run");
 			this.stopHit = true;
+		}
+		else if(regExp = /Created stop (\d+)/.exec(line)){
+			let bp_id = parseInt(regExp[1]);
+			this.runtime.emit('stopCreated', bp_id);
+			console.log(line);
+			console.log(`Caught creation of stop ${bp_id}`);
 		}
 		else if(line.search(/\(stop\s(\d+|[a-z_][a-z0-9_\[\]\.]*):/) !== -1){
 			if(line.search(/\(stop\s\d+/) !== -1)
@@ -230,7 +237,6 @@ export class XrunRuntime extends EventEmitter {
 
 		completed(null);
 	}, 1);
-
 
 	/**
 	 * Start executing the given program.
@@ -313,21 +319,9 @@ export class XrunRuntime extends EventEmitter {
 	// TODO: Support functionality
 	// A possible way of doing this is using stop with -subprogram option (and potentially -delbreak 1)
 	public getStepInTargets(frameId: number): IRuntimeStepInTargets[] {
-
-		const line = this.getLine();
-		const words = this.getWords(this.currentLine, line);
-
-		// return nothing if frameId is out of range
-		if (frameId < 0 || frameId >= words.length) {
-			return [];
-		}
-
-		const { name, index  }  = words[frameId];
-
-		// make every character of the frame a potential "step in" target
 		return name.split('').map((c, ix) => {
 			return {
-				id: index + ix,
+				id: ix,
 				label: `target: ${c}`
 			};
 		});
@@ -401,22 +395,6 @@ export class XrunRuntime extends EventEmitter {
 	}
 
 	/**
-	 * Get all existing breakpoints.
-	 */
-	public async getBreakpoints(): Promise<number[]> {
-		return this.sendCommandWaitResponse("stop -show").then((lines: string[]) => {
-			var bpIds: number[] = [];
-			for(var l of lines){
-				let m = /^(\d+)\s/.exec(l);
-				if(m){
-					bpIds.push(parseInt(m[1]));
-				}
-			}
-			return bpIds;
-		});
-	}
-
-	/**
 	 * Format user condition in a best effort to meet tcl expression requirements, or return undefined
 	 */
 	private formatConditionToTcl(expression: string): string | undefined{
@@ -440,8 +418,9 @@ export class XrunRuntime extends EventEmitter {
 	/**
 	 * Set breakpoint in file with given line.
 	 */
-	public setBreakpoint(path: string, line: number, hitCountCondition: string | undefined, condition: string | undefined): IRuntimeBreakpoint {		
-		const bp: IRuntimeBreakpoint = { verified: true, line, id: this.breakpointId++ };
+	public async setBreakPoint(path: string, line: number, hitCountCondition: string | undefined, condition: string | undefined): Promise<IRuntimeBreakpoint> {		
+		const bp: IRuntimeBreakpoint = { verified: false, line, id: this.breakpointId++ };
+		var wait: NodeJS.Timeout;
 		// xrun format
 		// Line breakpoint: stop -create -file <filepath> -line <line# (not zero aligned)> -all -name <id>
 		var cmd: string = `stop -create -file ${path} -line ${line} -all -name ${bp.id}`;
@@ -453,16 +432,43 @@ export class XrunRuntime extends EventEmitter {
 			if(tcl_expression){
 				cmd += ` -if ${tcl_expression}`;
 			}
+			else{
+				return bp;
+			}
 		}
-		this.sendSimulatorTerminalCommand(cmd);
-
-		let bps = this.breakpoints.get(path);
+		let bps = this.breakPoints.get(path);
 		if (!bps) {
 			bps = new Array<IRuntimeBreakpoint>();
 			this.breakpoints.set(path, bps);
 		}
 		bps.push(bp);
-		return bp;
+
+		const verified = new Promise<IRuntimeBreakpoint>((resolve, reject) => {
+			const cb = ((id: number) => {
+				if(bp.id == id){
+					bp.verified = true;
+					this.runtime.removeListener('stopCreated', cb);
+					resolve(bp);
+				}
+			});
+			this.runtime.on('stopCreated', cb);
+		});
+
+		const timeout = new Promise<IRuntimeBreakpoint>((resolve, reject) => {
+			wait = setTimeout(() => {
+				resolve(bp);
+			}, 1000);
+		});
+
+		this.sendSimulatorTerminalCommand(cmd);
+
+		return Promise.race([
+			verified,
+			timeout
+		]).then(() => {
+			clearTimeout(wait);
+			return bp;
+		});
 	}
 
 	public clearBreakpoints(path: string): void {
@@ -661,23 +667,14 @@ export class XrunRuntime extends EventEmitter {
 		this.sendSimulatorTerminalCommand('deposit ' + name + ' = #' + value + ' -after 0 -relative');
 	}
 
-	// private methods
-
-	private getLine(line?: number): string {
-		return this.sourceLines[line === undefined ? this.currentLine : line].trim();
-	}
-
-	private getWords(l: number, line: string): Word[] {
-		// break line into words
-		const WORD_REGEXP = /[a-z]+/ig;
-		const words: Word[] = [];
-		let match: RegExpExecArray | null;
-		while (match = WORD_REGEXP.exec(line)) {
-			words.push({ name: match[0], line: l, index: match.index });
+	public forceOutputFlush(){
+		for(var i = 0; i < 1; i++){
+			this.sendSimulatorTerminalCommand('puts placeholderplaceholderplaceholderplaceholder123456789', true);
 		}
-		return words;
+		console.error('Forced output buffer flush');
 	}
 
+	// private methods
 	private sendEvent(event: string, ... args: any[]): void {
 		setTimeout(() => {
 			this.emit(event, ...args);
