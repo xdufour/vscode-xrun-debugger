@@ -416,6 +416,7 @@ export class XrunRuntime extends EventEmitter {
 	 */
 	public async setBreakPoint(path: string, line: number, hitCountCondition: string | undefined, condition: string | undefined): Promise<IRuntimeBreakpoint> {		
 		const bp: IRuntimeBreakpoint = { verified: false, line, id: this.breakpointId++ };
+		var wait: NodeJS.Timeout;
 		// xrun format
 		// Line breakpoint: stop -create -file <filepath> -line <line# (not zero aligned)> -all -name <id>
 		var cmd: string = `stop -create -file ${path} -line ${line} -all -name ${bp.id}`;
@@ -442,22 +443,17 @@ export class XrunRuntime extends EventEmitter {
 			const cb = ((id: number) => {
 				if(bp.id == id){
 					bp.verified = true;
-					console.log('Verified breakpoint ' + bp.id);
 					this.runtime.removeListener('stopCreated', cb);
-					console.log('listener removed, count: ' + this.runtime.listenerCount('stopCreated'));
 					resolve(bp);
 				}
 			});
 			this.runtime.on('stopCreated', cb);
-			console.log('listener added, count: ' + this.runtime.listenerCount('stopCreated'));
 		});
 
 		const timeout = new Promise<IRuntimeBreakpoint>((resolve, reject) => {
-			let wait = setTimeout(() => {
-				clearTimeout(wait);
-				console.log('Timed out verifying breakpoint');
+			wait = setTimeout(() => {
 				resolve(bp);
-			}, 5000);
+			}, 1000);
 		});
 
 		this.sendSimulatorTerminalCommand(cmd);
@@ -466,6 +462,7 @@ export class XrunRuntime extends EventEmitter {
 			verified,
 			timeout
 		]).then(() => {
+			clearTimeout(wait);
 			return bp;
 		});
 	}
@@ -665,6 +662,13 @@ export class XrunRuntime extends EventEmitter {
 
 	public setVariable(name: string, value: string){
 		this.sendSimulatorTerminalCommand('deposit ' + name + ' = #' + value + ' -after 0 -relative');
+	}
+
+	public forceOutputFlush(){
+		for(var i = 0; i < 1; i++){
+			this.sendSimulatorTerminalCommand('puts placeholderplaceholderplaceholderplaceholder123456789', true);
+		}
+		console.error('Forced output buffer flush');
 	}
 
 	// private methods

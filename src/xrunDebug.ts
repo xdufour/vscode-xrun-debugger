@@ -233,7 +233,8 @@ export class XrunDebugSession extends LoggingDebugSession {
 		await this._runtime.start(args.cwd, args.program, args.args, !!args.stopOnEntry, !args.noDebug);
 
 		this.sendEvent(new InitializedEvent());
-
+		
+		// FIXME: Properly wait until launch is done before resuming configuration (breakpoints etc).
 		// wait 1 second until configuration has finished (and configurationDoneRequest has been called)
 		await this._configurationDone.wait(1000);
 
@@ -259,6 +260,11 @@ export class XrunDebugSession extends LoggingDebugSession {
 				return bp;
 			});
 		});
+
+		// force runtime process to dump stdout buffer to guarantee all breakpoints are obtained
+		setTimeout(() => {
+			this._runtime.forceOutputFlush();
+		}, 200);
 
 		const actualBreakpoints = await Promise.all<DebugProtocol.Breakpoint>(actualBreakpoints0);
 
