@@ -436,7 +436,7 @@ export class XrunRuntime extends EventEmitter {
 				return bp;
 			}
 		}
-		let bps = this.breakPoints.get(path);
+		let bps = this.breakpoints.get(path);
 		if (!bps) {
 			bps = new Array<IRuntimeBreakpoint>();
 			this.breakpoints.set(path, bps);

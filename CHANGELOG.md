@@ -5,17 +5,18 @@ All notable changes to the "vscode-xrun-debugger" will be documented in this fil
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2022-11-31
+## [Unreleased] - 2022-12-03
 
 ### Changed
 
-- Detection of simulation end is now always detected by acknowledging the $finish keyword
+- `args` launch configuration option now supports array of strings, and YAML files require the dictionary key leading to the target list to be specified in a `file.yml:key` format.
+
+### Fixed
+
+- Line breakpoints are now properly validated upon being set.
+- Detection of simulation end is now always detected by acknowledging the $finish keyword.
 
 ## 0.1.1 - 2022-11-20
-
-### Changed
-
-- "args" launch configuration option now supports array of strings, and YAML files require the dictionary key leading to the target list to be specified in a `file.yml:key` format.
 
 ### Fixed
 
@@ -36,9 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- "env" launch configuration option renamed to "cwd".
-- "consoleKeywords" launch configuration option renamed to "problemMatchers".
-- "AskForArguments" configuration provider command renamed to "SpecifyArgs".
+- `env` launch configuration option renamed to `cwd`.
+- `consoleKeywords` launch configuration option renamed to `problemMatchers`.
+- `AskForArguments` configuration provider command renamed to `SpecifyArgs`.
 - Extension now activates on SystemVerilog and Verilog language detection.
 
 ### Fixed
