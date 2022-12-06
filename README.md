@@ -44,5 +44,19 @@ ext install boreas-technologies.xrun-debug
 - `stopOnEntry` - Automatically stop after launch. Setting to false will cause simulator to run until the first user breakpoint.
 - `noDebug` - Run simulation without debug.
 
+## Known Issues, Limitations and Workarounds
+
+### User-facing
+
+- XrunDebug requires GNU Bash shell installed.
+- Current execution require a bash script be wrapped around xrun in order to translate non-generic switch arguments:
+  - Replace `-i` with `-linedebug`
+- Non-UVM testbenches may not start properly because of the current startup sequence coupling with the `stop_at_build` switch and are therefore not recommended.
+- `stopAtEntry=false` configurations may occasionally fail to relinquish output to the client console on the first debug session.
+
+### Internal
+
+- Output-returning commands sent with the debugger stopped on a breakpoint (including the stop create command itself) may fail due to the Node.js `child_process.stdout` internal buffer keeping the expected output from being obtained in time and require manual flushing. Current workaround involves sending a `puts` command to Xcelium afterward in order to "shove" stdout.
+
 ## License
 This extension is licensed under [MIT License](https://github.com/xdufour/vscode-xrun-debugger/blob/main/LICENSE).
